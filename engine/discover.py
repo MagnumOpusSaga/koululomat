@@ -159,6 +159,22 @@ def discover(mun: dict, max_pages=45, log=None) -> dict:
                     q.appendleft((href, depth + 1))
             elif (onsite or school_channel) and depth < 3 and NAV_HIT.search(href + " " + txt):
                 q.append((href, depth + 1))
+    # 4a. kunnan oma sivuhaku (WordPress ?s=, Drupal /haku?search=) – ilmainen
+    if not any(sc >= 7 for sc, _ in scored.values()):
+        from urllib.parse import quote
+        p = urlparse(home)
+        base = f"{p.scheme}://{p.netloc}"
+        for q_ in ("loma-ajat", "työ- ja loma-ajat", "lukukaudet"):
+            for pat in ("/?s={q}", "/haku?search={q}", "/search?keys={q}"):
+                mm = fetch.get(base + pat.format(q=quote(q_)))
+                if mm.get("status") != 200:
+                    continue
+                d = read(mm)
+                for href, txt in d.get("links", []):
+                    if same_site(href, home) and "?s=" not in href and not SKIP.search(href) and \
+                            (URL_HIT.search(href) or re.search(r"loma-ajat|työ- ja loma|lukukaudet|työ- ja vapaa", txt, re.I)):
+                        add(href.split("?")[0], 7, "sivuhaku")
+                break
     # 4. hakurajapinta vain, jos ryömintä ei löytänyt vahvaa ehdokasta (Brave: ~5 $/1000 hakua, 5 $ kuukausikrediitti)
     if not any(sc >= 7 for sc, _ in scored.values()):
         for q in queries_fi(mun)[:2]:

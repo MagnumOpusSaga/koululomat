@@ -43,10 +43,21 @@ def pdf_pages_png(pdf_path: str, max_pages=4, dpi=110) -> list:
     return sorted(str(p) for p in Path(td).glob("p*.png"))
 
 
-def read_with_ai(kunta: str, text: str = "", images=(), hard=False, years=("2026-2027", "2027-2028")) -> dict | None:
+CACHE = Path(os.environ.get("KOULULOMAT_CACHE", Path(__file__).resolve().parent.parent / "cache"))
+
+
+def available() -> bool:
+    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+
+def read_with_ai(kunta: str, text: str = "", images=(), hard=False, years=("2026-2027", "2027-2028"), key=None) -> dict | None:
     c = _client()
     if c is None:
         return None
+    import hashlib
+    ck = CACHE / ("ai_" + hashlib.sha1(f"{PROMPT_VERSION}|{hard}|{kunta}|{key or text[:20000]}|{len(images)}".encode()).hexdigest() + ".json")
+    if ck.exists():
+        return json.loads(ck.read_text())
     content = []
     for img in images[:4]:
         content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png",
@@ -57,6 +68,43 @@ def read_with_ai(kunta: str, text: str = "", images=(), hard=False, years=("2026
                             messages=[{"role": "user", "content": content}])
     raw = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
     try:
-        return json.loads(raw[raw.find("{"): raw.rfind("}") + 1])
+        out = json.loads(raw[raw.find("{"): raw.rfind("}") + 1])
     except Exception:
-        return {"error": "json", "raw": raw[:500]}
+        out = {"error": "json", "raw": raw[:500]}
+    out["_usage"] = {"in": msg.usage.input_tokens, "out": msg.usage.output_tokens, "model": msg.model}
+    CACHE.mkdir(parents=True, exist_ok=True)
+    ck.write_text(json.dumps(out, ensure_ascii=False))
+    return out
+
+
+def to_records(ai: dict) -> dict:
+    """Tekoälyn JSON -> sama muoto kuin sääntölukijalla (extract_fi)."""
+    from .extract_fi import _derive
+    out = {}
+    if not ai or ai.get("error") or ai.get("kunta_oikein") is False:
+        return out
+    for y, v in (ai.get("lukuvuodet") or {}).items():
+        if not isinstance(v, dict) or v.get("koulumuoto") not in (None, "perus", "kaikki"):
+            continue
+        q = v.get("lainaukset") or {}
+        r = {}
+        def put(f, a, b=None, src=None):
+            if a:
+                r[f] = {"start": a, "end": b or a, "quote": ("AI: " + str(q.get(src or f, "")))[:180]}
+        put("start", v.get("alku"), src="alku")
+        put("end", v.get("loppu"), src="loppu")
+        put("term1_end", v.get("syyslukukausi_loppu"))
+        put("term2_start", v.get("kevatlukukausi_alku"))
+        for f, k in (("syys", "syysloma"), ("joulu", "joululoma"), ("talvi", "talviloma"), ("paasiainen", "paasiaisloma")):
+            x = v.get(k)
+            if isinstance(x, list) and len(x) == 2 and all(x):
+                put(f, x[0], x[1], src=k)
+        r["free"] = [{"start": d, "end": d, "quote": "AI"} for d in (v.get("vapaapaivat") or []) if d]
+        r["saturday"] = [{"start": d, "end": d, "quote": "AI"} for d in (v.get("lauantaikoulupaivat") or []) if d]
+        if isinstance(v.get("koulupaivia_ilmoitettu"), int):
+            r["days_doc"] = v["koulupaivia_ilmoitettu"]
+        try:
+            out[y] = _derive(y, r)
+        except Exception:
+            continue
+    return out

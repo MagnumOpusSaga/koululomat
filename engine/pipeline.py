@@ -9,6 +9,10 @@ from .adapters import attachment_links, classify_source, dynasty_siblings, read,
 from .checks import confidence, run_checks
 from .discover import discover
 from .extract_fi import extract
+from . import ai_reader
+from .discover import CONTENT_KW
+
+AI_MAX_PER_MUN = 4
 
 KIND_RANK = {"paatos": 0, "lovdata": 0, "forskrift": 0, "kuntasivu": 1, "liite": 2, "wilma": 3, "koulu": 4, "muu": 5}
 MAIN_FIELDS = ("start", "syys", "joulu", "talvi", "end")
@@ -55,6 +59,7 @@ def school_form(doc) -> str:
 
 def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=14, monitor=None, extra_urls=()):
     log = []
+    ai_calls = [0]
     disc = discover(mun, log=log)
     cands = [c[0] for c in disc["candidates"]] + list(extra_urls)
     queue = list(dict.fromkeys(list(extra_urls) + cands))[:max_docs]
@@ -87,8 +92,18 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
         variant = doc_variant(doc)
         obs = obsv[variant]
         res = extract(doc["text"], want_years=set(years), default_form=form)
+        reader = "rules"
+        incomplete = not any(all(k in r for k in ("syys", "joulu", "talvi")) for r in res.values())
+        if ai_reader.available() and ai_calls[0] < AI_MAX_PER_MUN and (doc["flags"].get("grid") or incomplete) \
+                and CONTENT_KW.search(doc["text"]) and re.search(r"20(26|27|28)", doc["text"]):
+            imgs = ai_reader.pdf_pages_png(m["path"], max_pages=3) if doc["format"] in ("pdf", "pdf_scan") and doc["flags"].get("grid") else []
+            ai = ai_reader.read_with_ai(mun["fi"], doc["text"], images=imgs, hard=bool(imgs), years=years, key=fetch.content_hash(doc["text"]))
+            ai_calls[0] += 1
+            ai_res = ai_reader.to_records(ai)
+            if any(all(k in r for k in ("syys", "joulu", "talvi")) for r in ai_res.values()):
+                res, reader = ai_res, "ai"
         src = {"url": doc["url"], "kind": kind, "format": doc["format"], "flags": doc["flags"],
-               "hash": h[:16], "change": change, "variant": variant, "years": sorted(res.keys())}
+               "hash": h[:16], "change": change, "variant": variant, "reader": reader, "years": sorted(res.keys())}
         sources.append(src)
         flags_by_url[doc["url"]] = doc["flags"]
         for y, r in res.items():

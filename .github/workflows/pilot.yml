@@ -1,0 +1,31 @@
+name: Pilotti ja kontrolli (ei julkaisua)
+on: { workflow_dispatch: {} }
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-fin tesseract-ocr-swe
+      - run: pip install requests beautifulsoup4 lxml anthropic
+      - uses: actions/cache@v4
+        with: { path: cache, key: pilot-${{ github.run_id }}, restore-keys: pilot- }
+      - name: Pilotti + kontrolli
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+          KOULULOMAT_CONTACT: ${{ vars.KOULULOMAT_CONTACT }}
+        run: |
+          mkdir -p out out_hold
+          python3 run_pilot.py
+          python3 run_hold.py
+          python3 evaluate.py | tee evaluate.txt
+          python3 - <<'PY'
+          import json,glob
+          n=sum(1 for p in glob.glob('out*/*.json') for s in json.load(open(p)).get('sources',[]) if s.get('reader')=='ai')
+          print('tekoälyllä luettuja dokumentteja:', n)
+          PY
+      - uses: actions/upload-artifact@v4
+        with: { name: pilot-results, path: "out*/\nevaluate.txt" }

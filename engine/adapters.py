@@ -134,7 +134,8 @@ def read(meta: dict) -> dict:
         # kalenteriruudukko: viikonpäivärivejä tai HF/VF-koodeja -> visiolukija
         "grid": len(WEEKDAY_ROW_RE.findall(t)) >= 3 or len(GRID_CODE_RE.findall(t)) >= 8
                 or len(re.findall(r"(?m)^\s*(MA|TI|KE|TO|PE|LA|SU|Må|Ti|On|To|Fr)\b(\s+\d{1,2}){2,}", t)) >= 5
-                or len(re.findall(r"\d+\s+työpäivää", t)) >= 6,
+                or len(re.findall(r"\d+\s+työpäivää", t)) >= 6
+                or len(re.findall(r"(?m)^\s*\d{1,2}\s+\d{1,2}\.\d{1,2}\.\s*[-–]\s*\d{1,2}\.\d{1,2}\.", t)) >= 8,
         "attachment_only": bool(re.search(r"liitteen\s+mukai|enligt\s+bilaga|jf\.?\s*vedlegg", t, re.I))
                            and not re.search(r"syysloma\s*:?\s*\d|höstlov\s*:?\s*\d", t, re.I),
     }

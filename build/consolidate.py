@@ -25,12 +25,16 @@ def main(dirs):
             res[r["municipality"]] = r
     now = datetime.now(timezone.utc).date().isoformat()
     out = []
+    review = []
     for m in muns:
         r = res.get(m["id"])
         rec = {"id": m["id"], "name": m["fi"], "name_sv": m.get("sv"), "region": m["region"],
                "pop": m["pop"], "home": (r or {}).get("home"), "years": {}}
         for y in YEARS:
             v = ((r or {}).get("years") or {}).get(y)
+            if v and v["checks"].get("plausibility"):
+                review.append({"id": m["id"], "name": m["fi"], "year": y, "issues": v["checks"]["plausibility"], "source": v.get("primary")})
+                v = None  # järkevyyspoikkeama: ei näytetä luettuna, vaan arviona kunnes tarkistettu
             if v and all(f in v["fields"] for f in ("syys", "joulu", "talvi")):
                 f = v["fields"]
                 rec["years"][y] = {
@@ -61,6 +65,8 @@ def main(dirs):
             if est:
                 rec["years"][y] = {"status": "arvio", "confidence": "arvio", "source": None,
                                    "updated": now, "fields": est}
+    (ROOT / "data").mkdir(exist_ok=True)
+    (ROOT / "data" / "review_queue.json").write_text(json.dumps(review, ensure_ascii=False, indent=1))
     json.dump(out, sys.stdout, ensure_ascii=False, indent=0)
 
 

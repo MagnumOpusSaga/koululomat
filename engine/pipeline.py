@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 from . import fetch
 from .adapters import attachment_links, classify_source, dynasty_siblings, read, same_site
-from .checks import confidence, run_checks
+from .checks import confidence, plausibility, run_checks
 from .discover import discover
 from .extract_fi import extract
 from . import ai_reader
@@ -94,16 +94,20 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
         res = extract(doc["text"], want_years=set(years), default_form=form)
         reader = "rules"
         incomplete = not any(all(k in r for k in ("syys", "joulu", "talvi")) for r in res.values())
+        # järkevyyspoikkeama (esim. talviloma lokakuussa, Ilmajoki: kaksipalstainen ruudukko) -> tekoäly lukee uudelleen
+        implausible = any(plausibility(country, y, r) for y, r in res.items())
         has_words = bool(CONTENT_KW.search(doc["text"]))
         looks_calendar = has_words or bool(URL_HIT.search(doc["url"]))  # värikoodattu ruudukko: ei lomasanoja tekstissä
-        if ai_reader.available() and ai_calls[0] < AI_MAX_PER_MUN and (doc["flags"].get("grid") or incomplete) \
+        if ai_reader.available() and ai_calls[0] < AI_MAX_PER_MUN and (doc["flags"].get("grid") or incomplete or implausible) \
                 and looks_calendar and re.search(r"20(26|27|28)", doc["text"] + doc["url"]):
             is_pdf = doc["format"] in ("pdf", "pdf_scan")
             imgs = ai_reader.pdf_pages_png(m["path"], max_pages=3) if is_pdf and (doc["flags"].get("grid") or not has_words) else []
             ai = ai_reader.read_with_ai(mun["fi"], doc["text"], images=imgs, hard=bool(imgs), years=years, key=fetch.content_hash(doc["text"]))
             ai_calls[0] += 1
             ai_res = ai_reader.to_records(ai)
-            if any(all(k in r for k in ("syys", "joulu", "talvi")) for r in ai_res.values()):
+            ai_ok = any(all(k in r for k in ("syys", "joulu", "talvi")) for r in ai_res.values())
+            ai_clean = ai_ok and not any(plausibility(country, y, r) for y, r in ai_res.items())
+            if ai_ok and (incomplete or ai_clean or doc["flags"].get("grid")):
                 res, reader = ai_res, "ai"
         src = {"url": doc["url"], "kind": kind, "format": doc["format"], "flags": doc["flags"],
                "hash": h[:16], "change": change, "variant": variant, "reader": reader, "years": sorted(res.keys())}
@@ -197,6 +201,7 @@ def merge_years(obs, years, country, flags_by_url):
         out[y] = {"fields": merged, "checks": chk, "conflicts": conflicts, "primary": pu,
                   "status": "ehdotus" if is_prop else "päätetty",
                   "confidence": confidence(fs, is_prop, chk["days_ok"], official,
-                                                complete=all(f in merged for f in ("syys", "joulu", "talvi"))),
+                                                complete=all(f in merged for f in ("syys", "joulu", "talvi"))
+                                                and not chk["plausibility"]),
                   "missing": [f for f in MAIN_FIELDS if f not in merged]}
     return out

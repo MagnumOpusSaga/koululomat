@@ -10,7 +10,7 @@ from .checks import confidence, run_checks
 from .discover import discover
 from .extract_fi import extract
 from . import ai_reader
-from .discover import CONTENT_KW
+from .discover import CONTENT_KW, URL_HIT
 
 AI_MAX_PER_MUN = 4
 
@@ -94,9 +94,12 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
         res = extract(doc["text"], want_years=set(years), default_form=form)
         reader = "rules"
         incomplete = not any(all(k in r for k in ("syys", "joulu", "talvi")) for r in res.values())
+        has_words = bool(CONTENT_KW.search(doc["text"]))
+        looks_calendar = has_words or bool(URL_HIT.search(doc["url"]))  # värikoodattu ruudukko: ei lomasanoja tekstissä
         if ai_reader.available() and ai_calls[0] < AI_MAX_PER_MUN and (doc["flags"].get("grid") or incomplete) \
-                and CONTENT_KW.search(doc["text"]) and re.search(r"20(26|27|28)", doc["text"]):
-            imgs = ai_reader.pdf_pages_png(m["path"], max_pages=3) if doc["format"] in ("pdf", "pdf_scan") and doc["flags"].get("grid") else []
+                and looks_calendar and re.search(r"20(26|27|28)", doc["text"] + doc["url"]):
+            is_pdf = doc["format"] in ("pdf", "pdf_scan")
+            imgs = ai_reader.pdf_pages_png(m["path"], max_pages=3) if is_pdf and (doc["flags"].get("grid") or not has_words) else []
             ai = ai_reader.read_with_ai(mun["fi"], doc["text"], images=imgs, hard=bool(imgs), years=years, key=fetch.content_hash(doc["text"]))
             ai_calls[0] += 1
             ai_res = ai_reader.to_records(ai)

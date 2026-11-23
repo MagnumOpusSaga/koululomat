@@ -131,10 +131,6 @@ def discover(mun: dict, max_pages=45, log=None) -> dict:
         if URL_HIT.search(u):
             add(u, 5, "sitemap")
             res["sitemap_hits"] += 1
-    # 2. hakurajapinta
-    for q in queries_fi(mun):
-        for u in search_api(q):
-            add(u, 6, "haku")
     # 3. ryömintä
     q = deque([(home, 0)])
     seen = set()
@@ -163,6 +159,12 @@ def discover(mun: dict, max_pages=45, log=None) -> dict:
                     q.appendleft((href, depth + 1))
             elif (onsite or school_channel) and depth < 3 and NAV_HIT.search(href + " " + txt):
                 q.append((href, depth + 1))
+    # 4. hakurajapinta vain, jos ryömintä ei löytänyt vahvaa ehdokasta (Brave: ~5 $/1000 hakua, 5 $ kuukausikrediitti)
+    if not any(sc >= 7 for sc, _ in scored.values()):
+        for q in queries_fi(mun)[:2]:
+            for u in search_api(q):
+                add(u, 6, "haku")
+        res["searched"] = bool(os.environ.get("BRAVE_API_KEY"))
     res["pages_crawled"] = len(seen)
     res["candidates"] = sorted(([u, s, w] for u, (s, w) in scored.items()), key=lambda x: -x[1])
     return res

@@ -1,0 +1,12 @@
+cache/
+__pycache__/
+site/
+out/
+out_hold/
+out_v1/
+out_all/
+*.log
+wd_sites.json
+kunta_maakunta.json
+fi_kunnat*.json
+fi_vaesto.json

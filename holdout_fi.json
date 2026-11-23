@@ -1,0 +1,302 @@
+[
+{
+"id": "698",
+"fi": "Rovaniemi",
+"sv": "Rovaniemi",
+"pop": 66191,
+"size": "suuri",
+"website": "https://www.rovaniemi.fi/",
+"region": "Lappi",
+"region_code": "19"
+},
+{
+"id": "405",
+"fi": "Lappeenranta",
+"sv": "Villmanstrand",
+"pop": 73241,
+"size": "suuri",
+"website": "https://lappeenranta.fi/",
+"region": "Etelä-Karjala",
+"region_code": "09"
+},
+{
+"id": "743",
+"fi": "Seinäjoki",
+"sv": "Seinäjoki",
+"pop": 67283,
+"size": "suuri",
+"website": "https://www.seinajoki.fi/",
+"region": "Etelä-Pohjanmaa",
+"region_code": "14"
+},
+{
+"id": "286",
+"fi": "Kouvola",
+"sv": "Kouvola",
+"pop": 77625,
+"size": "suuri",
+"website": "https://www.kouvola.fi/",
+"region": "Kymenlaakso",
+"region_code": "08"
+},
+{
+"id": "167",
+"fi": "Joensuu",
+"sv": "Joensuu",
+"pop": 79129,
+"size": "suuri",
+"website": "https://www.joensuu.fi/",
+"region": "Pohjois-Karjala",
+"region_code": "12"
+},
+{
+"id": "098",
+"fi": "Hollola",
+"sv": "Hollola",
+"pop": 22775,
+"size": "keski",
+"website": "https://hollola.fi/",
+"region": "Päijät-Häme",
+"region_code": "07"
+},
+{
+"id": "980",
+"fi": "Ylöjärvi",
+"sv": "Ylöjärvi",
+"pop": 33658,
+"size": "keski",
+"website": "https://www.ylojarvi.fi/",
+"region": "Pirkanmaa",
+"region_code": "06"
+},
+{
+"id": "111",
+"fi": "Heinola",
+"sv": "Heinola",
+"pop": 17694,
+"size": "keski",
+"website": "https://www.heinola.fi/",
+"region": "Päijät-Häme",
+"region_code": "07"
+},
+{
+"id": "577",
+"fi": "Paimio",
+"sv": "Pemar",
+"pop": 11284,
+"size": "keski",
+"website": "https://www.paimio.fi/",
+"region": "Varsinais-Suomi",
+"region_code": "02"
+},
+{
+"id": "140",
+"fi": "Iisalmi",
+"sv": "Idensalmi",
+"pop": 20205,
+"size": "keski",
+"website": "https://www.iisalmi.fi/",
+"region": "Pohjois-Savo",
+"region_code": "11"
+},
+{
+"id": "680",
+"fi": "Raisio",
+"sv": "Reso",
+"pop": 26036,
+"size": "keski",
+"website": "https://raisio.fi/",
+"region": "Varsinais-Suomi",
+"region_code": "02"
+},
+{
+"id": "182",
+"fi": "Jämsä",
+"sv": "Jämsä",
+"pop": 19020,
+"size": "keski",
+"website": "https://www.jamsa.fi/",
+"region": "Keski-Suomi",
+"region_code": "13"
+},
+{
+"id": "020",
+"fi": "Akaa",
+"sv": "Ackas",
+"pop": 16429,
+"size": "keski",
+"website": "https://akaa.fi/",
+"region": "Pirkanmaa",
+"region_code": "06"
+},
+{
+"id": "165",
+"fi": "Janakkala",
+"sv": "Janakkala",
+"pop": 15867,
+"size": "keski",
+"website": "https://www.janakkala.fi/",
+"region": "Kanta-Häme",
+"region_code": "05"
+},
+{
+"id": "301",
+"fi": "Kurikka",
+"sv": "Kurikka",
+"pop": 19441,
+"size": "keski",
+"website": "https://kurikka.fi/",
+"region": "Etelä-Pohjanmaa",
+"region_code": "14"
+},
+{
+"id": "638",
+"fi": "Porvoo",
+"sv": "Borgå",
+"pop": 51863,
+"size": "keski",
+"website": "https://www.porvoo.fi/",
+"region": "Uusimaa",
+"region_code": "01"
+},
+{
+"id": "145",
+"fi": "Ilmajoki",
+"sv": "Ilmola",
+"pop": 12405,
+"size": "keski",
+"website": "https://ilmajoki.fi/",
+"region": "Etelä-Pohjanmaa",
+"region_code": "14"
+},
+{
+"id": "169",
+"fi": "Jokioinen",
+"sv": "Jockis",
+"pop": 4795,
+"size": "pieni",
+"website": "https://www.jokioinen.fi/",
+"region": "Kanta-Häme",
+"region_code": "05"
+},
+{
+"id": "508",
+"fi": "Mänttä-Vilppula",
+"sv": "Mänttä-Vilppula",
+"pop": 9109,
+"size": "pieni",
+"website": "https://www.manttavilppula.fi/",
+"region": "Pirkanmaa",
+"region_code": "06"
+},
+{
+"id": "204",
+"fi": "Kaavi",
+"sv": "Kaavi",
+"pop": 2547,
+"size": "pieni",
+"website": "https://kaavi.fi/",
+"region": "Pohjois-Savo",
+"region_code": "11"
+},
+{
+"id": "069",
+"fi": "Haapajärvi",
+"sv": "Haapajärvi",
+"pop": 6441,
+"size": "pieni",
+"website": "https://www.haapajarvi.fi/",
+"region": "Pohjois-Pohjanmaa",
+"region_code": "17"
+},
+{
+"id": "142",
+"fi": "Iitti",
+"sv": "Itis",
+"pop": 6329,
+"size": "pieni",
+"website": "https://www.iitti.fi/",
+"region": "Päijät-Häme",
+"region_code": "07"
+},
+{
+"id": "619",
+"fi": "Punkalaidun",
+"sv": "Punkalaidun",
+"pop": 2546,
+"size": "pieni",
+"website": "https://www.punkalaidun.fi/",
+"region": "Pirkanmaa",
+"region_code": "06"
+},
+{
+"id": "683",
+"fi": "Ranua",
+"sv": "Ranua",
+"pop": 3530,
+"size": "pieni",
+"website": "https://www.ranua.fi/",
+"region": "Lappi",
+"region_code": "19"
+},
+{
+"id": "309",
+"fi": "Outokumpu",
+"sv": "Outokumpu",
+"pop": 6365,
+"size": "pieni",
+"website": "https://www.outokummunkaupunki.fi/",
+"region": "Pohjois-Karjala",
+"region_code": "12"
+},
+{
+"id": "441",
+"fi": "Luumäki",
+"sv": "Luumäki",
+"pop": 4304,
+"size": "pieni",
+"website": "https://www.luumaki.fi/",
+"region": "Etelä-Karjala",
+"region_code": "09"
+},
+{
+"id": "887",
+"fi": "Urjala",
+"sv": "Urjala",
+"pop": 4440,
+"size": "pieni",
+"website": "https://www.urjala.fi/",
+"region": "Pirkanmaa",
+"region_code": "06"
+},
+{
+"id": "290",
+"fi": "Kuhmo",
+"sv": "Kuhmo",
+"pop": 7300,
+"size": "pieni",
+"website": "https://www.kuhmo.fi/",
+"region": "Kainuu",
+"region_code": "18"
+},
+{
+"id": "086",
+"fi": "Hausjärvi",
+"sv": "Hausjärvi",
+"pop": 7862,
+"size": "pieni",
+"website": "https://www.hausjarvi.fi/",
+"region": "Kanta-Häme",
+"region_code": "05"
+},
+{
+"id": "857",
+"fi": "Tuusniemi",
+"sv": "Tuusniemi",
+"pop": 2270,
+"size": "pieni",
+"website": "https://www.tuusniemi.fi/",
+"region": "Pohjois-Savo",
+"region_code": "11"
+}
+]

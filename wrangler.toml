@@ -1,0 +1,8 @@
+name = "koululomat"
+pages_build_output_dir = "site"
+compatibility_date = "2026-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "koululomat"
+database_id = "f5a5a242-4dec-4500-bf7c-7729c0954b6d"

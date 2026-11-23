@@ -1,0 +1,35 @@
+name: Koululomat update
+on:
+  schedule:
+    - cron: "17 3 * 10-12,1-2 1"   # loka–helmi viikoittain (ma)
+    - cron: "17 3 1 3-9 *"          # muulloin kuukausittain
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-fin tesseract-ocr-swe
+      - run: pip install requests beautifulsoup4 lxml anthropic
+      - uses: actions/cache@v4
+        with: { path: "cache\nstate", key: fetch-${{ github.run_id }}, restore-keys: fetch- }
+      - name: Fetch + read all municipalities
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+          KOULULOMAT_CONTACT: ${{ vars.KOULULOMAT_CONTACT }}
+        run: python3 run_all.py fi
+      - run: python3 build/consolidate.py out_all > data/fi.json
+      - run: PREVIEW=${{ vars.PREVIEW || '1' }} python3 build/build_site.py data/fi.json site
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler@3 pages project create koululomat --production-branch main || true
+          npx wrangler@3 pages deploy site --project-name koululomat --branch main
+      - uses: actions/upload-artifact@v4
+        with: { name: data, path: "data/*.json" }

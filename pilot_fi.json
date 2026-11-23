@@ -1,0 +1,302 @@
+[
+{
+"id": "091",
+"fi": "Helsinki",
+"sv": "Helsingfors",
+"pop": 694392,
+"size": "suuri",
+"website": "https://www.hel.fi/sv",
+"region": "Uusimaa",
+"region_code": "01"
+},
+{
+"id": "049",
+"fi": "Espoo",
+"sv": "Esbo",
+"pop": 325716,
+"size": "suuri",
+"website": "https://www.espoo.fi",
+"region": "Uusimaa",
+"region_code": "01"
+},
+{
+"id": "837",
+"fi": "Tampere",
+"sv": "Tammerfors",
+"pop": 263337,
+"size": "suuri",
+"website": "https://www.tampere.fi/",
+"region": "Pirkanmaa",
+"region_code": "06"
+},
+{
+"id": "092",
+"fi": "Vantaa",
+"sv": "Vanda",
+"pop": 252956,
+"size": "suuri",
+"website": "https://www.vantaa.fi/",
+"region": "Uusimaa",
+"region_code": "01"
+},
+{
+"id": "564",
+"fi": "Oulu",
+"sv": "Uleåborg",
+"pop": 217469,
+"size": "suuri",
+"website": "https://www.ouka.fi/",
+"region": "Pohjois-Pohjanmaa",
+"region_code": "17"
+},
+{
+"id": "853",
+"fi": "Turku",
+"sv": "Åbo",
+"pop": 209633,
+"size": "suuri",
+"website": "https://turku.fi",
+"region": "Varsinais-Suomi",
+"region_code": "02"
+},
+{
+"id": "179",
+"fi": "Jyväskylä",
+"sv": "Jyväskylä",
+"pop": 149895,
+"size": "suuri",
+"website": "https://www.jyvaskyla.fi/",
+"region": "Keski-Suomi",
+"region_code": "13"
+},
+{
+"id": "297",
+"fi": "Kuopio",
+"sv": "Kuopio",
+"pop": 126572,
+"size": "suuri",
+"website": "https://www.kuopio.fi/",
+"region": "Pohjois-Savo",
+"region_code": "11"
+},
+{
+"id": "398",
+"fi": "Lahti",
+"sv": "Lahtis",
+"pop": 121832,
+"size": "suuri",
+"website": "https://www.lahti.fi/",
+"region": "Päijät-Häme",
+"region_code": "07"
+},
+{
+"id": "609",
+"fi": "Pori",
+"sv": "Björneborg",
+"pop": 83010,
+"size": "suuri",
+"website": "https://www.pori.fi/",
+"region": "Satakunta",
+"region_code": "04"
+},
+{
+"id": "444",
+"fi": "Lohja",
+"sv": "Lojo",
+"pop": 45435,
+"size": "keski",
+"website": "https://www.lohja.fi/",
+"region": "Uusimaa",
+"region_code": "01"
+},
+{
+"id": "694",
+"fi": "Riihimäki",
+"sv": "Riihimäki",
+"pop": 28555,
+"size": "keski",
+"website": "https://www.riihimaki.fi/",
+"region": "Kanta-Häme",
+"region_code": "05"
+},
+{
+"id": "851",
+"fi": "Tornio",
+"sv": "Torneå",
+"pop": 20823,
+"size": "keski",
+"website": "https://www.tornio.fi/",
+"region": "Lappi",
+"region_code": "19"
+},
+{
+"id": "977",
+"fi": "Ylivieska",
+"sv": "Ylivieska",
+"pop": 15274,
+"size": "keski",
+"website": "https://www.ylivieska.fi/",
+"region": "Pohjois-Pohjanmaa",
+"region_code": "17"
+},
+{
+"id": "915",
+"fi": "Varkaus",
+"sv": "Varkaus",
+"pop": 19433,
+"size": "keski",
+"website": "https://varkaus.fi/",
+"region": "Pohjois-Savo",
+"region_code": "11"
+},
+{
+"id": "186",
+"fi": "Järvenpää",
+"sv": "Träskända",
+"pop": 46944,
+"size": "keski",
+"website": "https://www.jarvenpaa.fi/",
+"region": "Uusimaa",
+"region_code": "01"
+},
+{
+"id": "536",
+"fi": "Nokia",
+"sv": "Nokia",
+"pop": 36571,
+"size": "keski",
+"website": "https://www.nokiankaupunki.fi/",
+"region": "Pirkanmaa",
+"region_code": "06"
+},
+{
+"id": "244",
+"fi": "Kempele",
+"sv": "Kempele",
+"pop": 19702,
+"size": "keski",
+"website": "https://www.kempele.fi/",
+"region": "Pohjois-Pohjanmaa",
+"region_code": "17"
+},
+{
+"id": "598",
+"fi": "Pietarsaari",
+"sv": "Jakobstad",
+"pop": 19657,
+"size": "keski",
+"website": "https://jakobstad.fi/",
+"region": "Pohjanmaa",
+"region_code": "15"
+},
+{
+"id": "529",
+"fi": "Naantali",
+"sv": "Nådendal",
+"pop": 20390,
+"size": "keski",
+"website": "https://www.naantali.fi/",
+"region": "Varsinais-Suomi",
+"region_code": "02"
+},
+{
+"id": "250",
+"fi": "Kihniö",
+"sv": "Kihniö",
+"pop": 1670,
+"size": "pieni",
+"website": "https://www.kihnio.fi/",
+"region": "Pirkanmaa",
+"region_code": "06"
+},
+{
+"id": "438",
+"fi": "Lumparland",
+"sv": "Lumparland",
+"pop": 371,
+"size": "pieni",
+"website": "https://www.lumparland.ax/",
+"region": "Ahvenanmaa",
+"region_code": "21"
+},
+{
+"id": "483",
+"fi": "Merijärvi",
+"sv": "Merijärvi",
+"pop": 1031,
+"size": "pieni",
+"website": "https://www.merijarvi.fi/",
+"region": "Pohjois-Pohjanmaa",
+"region_code": "17"
+},
+{
+"id": "256",
+"fi": "Kinnula",
+"sv": "Kinnula",
+"pop": 1472,
+"size": "pieni",
+"website": "https://www.kinnula.fi/",
+"region": "Keski-Suomi",
+"region_code": "13"
+},
+{
+"id": "576",
+"fi": "Padasjoki",
+"sv": "Padasjoki",
+"pop": 2656,
+"size": "pieni",
+"website": "https://www.padasjoki.fi/",
+"region": "Päijät-Häme",
+"region_code": "07"
+},
+{
+"id": "213",
+"fi": "Kangasniemi",
+"sv": "Kangasniemi",
+"pop": 4952,
+"size": "pieni",
+"website": "https://www.kangasniemi.fi/",
+"region": "Etelä-Savo",
+"region_code": "10"
+},
+{
+"id": "580",
+"fi": "Parikkala",
+"sv": "Parikkala",
+"pop": 4235,
+"size": "pieni",
+"website": "https://parikkala.fi/",
+"region": "Etelä-Karjala",
+"region_code": "09"
+},
+{
+"id": "019",
+"fi": "Aura",
+"sv": "Aura",
+"pop": 3937,
+"size": "pieni",
+"website": "https://aura.fi/",
+"region": "Varsinais-Suomi",
+"region_code": "02"
+},
+{
+"id": "009",
+"fi": "Alavieska",
+"sv": "Alavieska",
+"pop": 2384,
+"size": "pieni",
+"website": "https://www.alavieska.fi/",
+"region": "Pohjois-Pohjanmaa",
+"region_code": "17"
+},
+{
+"id": "273",
+"fi": "Kolari",
+"sv": "Kolari",
+"pop": 4001,
+"size": "pieni",
+"website": "https://www.kolari.fi/",
+"region": "Lappi",
+"region_code": "19"
+}
+]

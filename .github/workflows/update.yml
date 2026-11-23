@@ -11,11 +11,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
+        with:
+          python-version: "3.12"
       - run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-fin tesseract-ocr-swe
       - run: pip install requests beautifulsoup4 lxml anthropic
       - uses: actions/cache@v4
-        with: { path: "cache\nstate", key: fetch-${{ github.run_id }}, restore-keys: fetch- }
+        with:
+          path: |
+            cache
+            state
+          key: fetch-${{ github.run_id }}
+          restore-keys: fetch-
       - name: Fetch + read all municipalities
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -32,4 +38,6 @@ jobs:
           npx wrangler@3 pages project create koululomat --production-branch main || true
           npx wrangler@3 pages deploy site --project-name koululomat --branch main
       - uses: actions/upload-artifact@v4
-        with: { name: data, path: "data/*.json" }
+        with:
+          name: data
+          path: data/*.json

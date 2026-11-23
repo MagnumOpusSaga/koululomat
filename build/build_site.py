@@ -15,7 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 PREVIEW = os.environ.get("PREVIEW", "1") == "1"
-BASE = os.environ.get("SITE_URL", "https://koululomat.pages.dev")
+BASE = os.environ.get("SITE_URL", "https://koululomat.fi")
 OWNER = "BR Entertainment (Y-tunnus 3183394-5)"
 WD = ["ma", "ti", "ke", "to", "pe", "la", "su"]
 LABEL = {"start": "Koulu alkaa", "syys": "Syysloma", "joulu": "Joululoma", "talvi": "Talviloma (hiihtoloma)", "end": "Koulu päättyy"}
@@ -50,7 +50,7 @@ def week(s):
 
 CSS = """*{box-sizing:border-box}body{margin:0;font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1b1f24;background:#fbfaf7}
 a{color:#0b5cad}header,main,footer{max-width:860px;margin:0 auto;padding:0 18px}header{padding-top:18px}
-.brand{font-weight:800;font-size:20px;text-decoration:none;color:#1b1f24}.brand span{color:#d2691e}
+.brand{font-weight:800;font-size:20px;text-decoration:none;color:#1b1f24}.brand span{color:#E8741E}
 .pv{background:#fff3c4;border-bottom:1px solid #e8d27a;padding:8px 18px;font-size:14px;text-align:center}
 h1{font-size:30px;line-height:1.2;margin:18px 0 6px}h2{font-size:21px;margin:28px 0 10px}.lead{color:#4a525c;margin:0 0 14px}
 table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e0d8;border-radius:10px;overflow:hidden}
@@ -75,8 +75,10 @@ def page(title, desc, body, path, schema=None):
     sd = f'<script type="application/ld+json">{json.dumps(schema, ensure_ascii=False)}</script>' if schema else ""
     return f"""<!doctype html><html lang="fi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(title)}</title><meta name="description" content="{html.escape(desc)}">{robots}
-<link rel="canonical" href="{BASE}{path}"><style>{CSS}</style>{sd}</head><body>{pv}
-<header><a class="brand" href="/">Koulu<span>lomat</span></a></header><main>{body}</main>
+<link rel="canonical" href="{BASE}{path}"><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png"><link rel="manifest" href="/site.webmanifest"><meta name="theme-color" content="#E8741E">
+<style>{CSS}</style>{sd}</head><body>{pv}
+<header><a class="brand" href="/"><img src="/logo.svg" width="30" height="30" alt="" style="vertical-align:-7px;margin-right:8px">Koulu<span>lomat</span></a></header><main>{body}</main>
 <footer>Tiedot haetaan aina kunnan omasta lähteestä (päätös, kunnan sivu tai liite). Jokaisella päivällä on lähde, tila ja päivityspäivä.
 Arviot on merkitty erikseen – tarkista oman koulusi päivät koululta.<br>Ei evästeitä, ei seurantaa. <a href="/tietoa/">Tietoa palvelusta</a> · <a href="/tietosuoja/">Tietosuoja</a><br>© {date.today().year} {OWNER}</footer></body></html>"""
 
@@ -246,7 +248,8 @@ document.querySelectorAll('li[data-n]').forEach(function(li){li.style.display=!q
             f'<p><a class="btn" href="/fi/hiihtoloma-2027/">Hiihtoloma 2027 viikoittain</a></p>{lists}{search_js}')
     write("/", page("Koulujen lomat kunnittain 2026–2027 – syysloma, joululoma, hiihtoloma | Koululomat",
                     "Koulujen loma-ajat jokaisessa Suomen kunnassa: syysloma, joululoma, talviloma ja hiihtoloma 2027. Lähteet kuntien päätöksistä.",
-                    body, "/"))
+                    body, "/", {"@context": "https://schema.org", "@type": "WebSite", "name": "Koululomat", "url": BASE + "/",
+                                "publisher": {"@type": "Organization", "name": "BR Entertainment", "logo": BASE + "/icon-512.png"}}))
 
     # tietoa ja tietosuoja
     write("/tietoa/", page("Tietoa palvelusta | Koululomat", "Miten koulujen lomatiedot kerätään ja tarkistetaan.",
@@ -266,6 +269,13 @@ Sivuilla ei ladata ulkopuolisia skriptejä tai fontteja. Kävijöinä on myös l
 Ilmoitukset poistetaan 24 kuukauden kuluttua.</p><p><b>Kalenteritilaus (.ics)</b> on tavallinen tiedosto, joka ei sisällä seurantaa.</p>
 <p>Palvelua ylläpitää {OWNER}. Sivusto toimii Cloudflaren palvelimilla.</p>""", "/tietosuoja/"))
 
+    static = Path(__file__).resolve().parent / "static"
+    for f in static.iterdir():
+        if f.suffix in (".svg", ".png", ".ico"):
+            shutil.copy(f, out / f.name)
+    (out / "site.webmanifest").write_text(json.dumps({"name": "Koululomat", "short_name": "Koululomat", "lang": "fi",
+        "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"}, {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"}],
+        "theme_color": "#E8741E", "background_color": "#FBFAF7", "display": "browser", "start_url": "/"}, ensure_ascii=False))
     (out / "robots.txt").write_text("User-agent: *\nDisallow: /\n" if PREVIEW else f"User-agent: *\nAllow: /\nSitemap: {BASE}/sitemap.xml\n")
     (out / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
                                      + "".join(f"<url><loc>{BASE}{u}</loc><lastmod>{today.isoformat()}</lastmod></url>" for u in urls) + "</urlset>\n")

@@ -5,10 +5,12 @@ from pathlib import Path
 from engine.pipeline import process
 from engine.checks import ALAND, ChangeMonitor
 OUT = Path("out_all"); OUT.mkdir(exist_ok=True)
+# käsin löydetyt kunnan omat lähdesivut (kunnat, joiden sivuja ryömintä ei löydä); luetaan ensimmäisinä
+HINTS = json.loads(Path("data/source_hints.json").read_text()) if Path("data/source_hints.json").exists() else {}
 def one(m):
     t = time.time()
     try:
-        r = process(m, country="ax" if m["id"] in ALAND else "fi")
+        r = process(m, country="ax" if m["id"] in ALAND else "fi", extra_urls=tuple(HINTS.get(m["id"], [])))
     except Exception as e:  # noqa: BLE001
         r = {"municipality": m["id"], "name": m["fi"], "error": repr(e), "years": {}, "sources": []}
     r["secs"] = round(time.time() - t)

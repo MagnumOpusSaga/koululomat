@@ -90,6 +90,9 @@ def read_html(path: str, base_url: str) -> dict:
     raw = Path(path).read_bytes()
     soup = BeautifulSoup(raw, "lxml")
     links = []
+    bt = soup.find("base", href=True)
+    if bt:  # <base href="/"> -> suhteelliset linkit ilman kauttaviivaa (Urjala, Jokioinen)
+        base_url = urljoin(base_url, bt["href"].strip())
     for a in soup.find_all("a", href=True):
         href = urljoin(base_url, a["href"].strip())
         if href.startswith("http"):

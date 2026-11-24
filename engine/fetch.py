@@ -51,8 +51,10 @@ def get(url: str, max_age_h: float = 24 * 7, timeout: int = 25) -> dict:
     body_p = CACHE / f"{k}.bin"
     if meta_p.exists() and (time.time() - meta_p.stat().st_mtime) < max_age_h * 3600:
         m = json.loads(meta_p.read_text())
-        m["path"] = str(body_p) if body_p.exists() else None
-        return m
+        # yhteysvirhettä ei pidetä välimuistissa viikkoa: yritetään uudelleen tunnin kuluttua
+        if not (m.get("error") and "Connect" in m["error"] and (time.time() - meta_p.stat().st_mtime) > 3600):
+            m["path"] = str(body_p) if body_p.exists() else None
+            return m
     m = {"url": url, "final_url": url, "status": None, "ctype": "", "error": None}
     if not _robots_ok(url):
         m["error"] = "robots"
@@ -62,15 +64,20 @@ def get(url: str, max_age_h: float = 24 * 7, timeout: int = 25) -> dict:
     wait = DELAY - (time.time() - _last.get(host, 0))
     if wait > 0:
         time.sleep(wait)
-    try:
-        r = _session.get(url, timeout=timeout, headers={"User-Agent": BROWSER_UA + " " + UA,
-                                                        "Accept-Language": "fi,sv;q=0.8,en;q=0.5"},
-                         stream=True, allow_redirects=True)
-        data = r.raw.read(MAX_BYTES, decode_content=True)
-        m.update(final_url=r.url, status=r.status_code, ctype=r.headers.get("content-type", ""))
-        body_p.write_bytes(data)
-    except Exception as e:  # noqa: BLE001
-        m["error"] = type(e).__name__ + ": " + str(e)[:200]
+    for attempt in range(2):  # hidas kuntapalvelin: yksi uusintayritys pidemmällä aikarajalla
+        try:
+            r = _session.get(url, timeout=timeout if attempt == 0 else timeout * 2,
+                             headers={"User-Agent": BROWSER_UA + " " + UA, "Accept-Language": "fi,sv;q=0.8,en;q=0.5"},
+                             stream=True, allow_redirects=True)
+            data = r.raw.read(MAX_BYTES, decode_content=True)
+            m.update(final_url=r.url, status=r.status_code, ctype=r.headers.get("content-type", ""), error=None)
+            body_p.write_bytes(data)
+            break
+        except Exception as e:  # noqa: BLE001
+            m["error"] = type(e).__name__ + ": " + str(e)[:200]
+            if "Connect" not in m["error"] and "Timeout" not in m["error"]:
+                break
+            time.sleep(4)
     _last[host] = time.time()
     meta_p.write_text(json.dumps(m))
     m["path"] = str(body_p) if body_p.exists() else None

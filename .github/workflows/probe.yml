@@ -23,6 +23,10 @@ jobs:
             state
           key: fetch-probe-${{ github.run_id }}
           restore-keys: fetch-
+      - name: Kotisivujen diagnostiikka
+        env:
+          KOULULOMAT_CONTACT: ${{ vars.KOULULOMAT_CONTACT }}
+        run: python3 scripts/diag_home.py ${{ inputs.ids }} | tee out_diag.txt || true
       - name: Probe
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -33,4 +37,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: probe
-          path: out_all/
+          path: |
+            out_all/
+            out_diag.txt

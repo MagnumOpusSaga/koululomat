@@ -13,7 +13,7 @@ from pathlib import Path
 
 MODEL_FAST = os.environ.get("KOULULOMAT_MODEL_FAST", "claude-haiku-5-5")
 MODEL_HARD = os.environ.get("KOULULOMAT_MODEL_HARD", "claude-sonnet-5-5")
-PROMPT_VERSION = "kl-2"
+PROMPT_VERSION = "kl-3"
 
 SYSTEM = """Luet kunnan koulujen työ- ja loma-ajat dokumentista. Palauta VAIN JSON:
 {"kunta_oikein": true|false, "dokumentti_kunta": "...", "tila": "päätetty"|"ehdotus",
@@ -27,7 +27,7 @@ kuntaa {kunta} eikä toista kuntaa tai yksittäistä koulua. Jos dokumentissa lu
 forslag tai päivät ovat muotoa xx.xx, tila = ehdotus. Kalenteriruudukossa koodit: HF=høstferie, JF=juleferie,
 VF=vinterferie, PF=påskeferie, SF/EF=sommer/elevfri; värikoodit selitteen mukaan. Kaksipalstaisessa
 ruudukossa syksy (elo–joulu) ja kevät (tammi–kesä) ovat eri palstoissa: syysloma on loka-marraskuussa, talviloma helmi-maaliskuussa.
-Ei selityksiä, ei koodilohkoja: vastaus alkaa merkillä { ja päättyy merkkiin }."""
+Älä luettele yksittäisiä koulupäiviä. Ei selityksiä, ei koodilohkoja: vastaus alkaa merkillä { ja päättyy merkkiin }."""
 
 
 def _client():
@@ -71,7 +71,7 @@ def read_with_ai(kunta: str, text: str = "", images=(), hard=False, years=("2026
     msg = None
     for attempt in range(4):
         try:
-            msg = c.messages.create(model=MODEL_HARD if hard else MODEL_FAST, max_tokens=4096,
+            msg = c.messages.create(model=MODEL_HARD if hard else MODEL_FAST, max_tokens=8192,
                                     system=SYSTEM.replace("{kunta}", kunta),
                                     messages=[{"role": "user", "content": content}])
             break

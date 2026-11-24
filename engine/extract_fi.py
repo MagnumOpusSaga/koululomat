@@ -29,10 +29,11 @@ FIELDS = {
 KW = {k: re.compile(v, re.I) for k, v in FIELDS.items()}
 ANY_KW = re.compile("|".join(f"(?:{v})" for v in FIELDS.values()), re.I)
 
+TERM_YEAR = re.compile(r"(syyslukukau\w*|syyskau\w*|hösttermin\w*|kevätlukukau\w*|kevätkau\w*|vårtermin\w*)\s+(20[2-3]\d)(?!\s*[–—/‐-]\s*\d)", re.I)
 YEARPAIR = re.compile(r"(?<!\d)(20[2-3]\d)\s*[–—/‐-]\s*(20[2-3]\d|[2-3]\d)(?!\d)")
 DAYS_RE = re.compile(r"(?:(\d{3})\s*(?:koulu|työ)päivä|(?:koulu|työ)päiviä\s*(?:on\s*)?(?:yhteensä\s*)?(\d{3})|(\d{3})\s*skoldagar|skoldagar\w*\s*:?\s*(\d{3}))", re.I)
 
-D = r"(\d{1,2})\.\s?(\d{1,2})(?:\.|(?=\s*[–—‐‑−-]))(?:\s?(20\d\d|\d\d)(?!\d))?"
+D = r"(\d{1,2})\.\s?(\d{1,2})(?:\.|(?=\s*[–—‐‑−-])|(?=[ \t]*(?:\(|,|;|$)))(?:\s?(20\d\d|\d\d)(?!\d))?"
 RANGE_FULL = re.compile(D + r"\s*" + DASH + r"\s*(?:\w{2,12}\s+)?" + D)
 RANGE_SHORT = re.compile(r"(?<![\d.])(\d{1,2})\.?\s*" + DASH + r"\s*(?:\w{2,12}\s+)?" + D)
 SINGLE = re.compile(r"(?<![\d.])" + D)
@@ -142,9 +143,15 @@ HEAD_VAR = [("sv", re.compile(r"ruotsinkiel|svenskspråkig|svenska skol", re.I))
 
 def _sections(t, default_form="perus"):
     """Lyhyet otsikkorivit vaihtavat osion koulumuotoa ja kieliversiota."""
-    out, pos = [(0, default_form, "")], 0
+    out, pos, prev = [(0, default_form, "")], 0, ""
     for line in t.split("\n"):
         L = line.strip()
+        cont = bool(L) and L[0].islower() and re.search(r"(\bja|\bsekä|\boch|,)\s*$", prev)
+        if L:
+            prev = L
+        if cont:  # rivitetyn otsikon jatko ("…peruskouluissa ja / lukiossa") ei vaihda osiota
+            pos += len(line) + 1
+            continue
         if 3 < len(L) < 130 and YEARPAIR.search(L) and not re.search(r"\d{1,2}\.\d{1,2}\.", L):
             # lukuvuoden otsikko nollaa osion (valikoiden otsikot eivät periydy sisältöön)
             form = next((f for f, rx in HEAD_FORM if rx.search(L)), default_form)
@@ -182,6 +189,11 @@ def extract(text: str, want_years=None, want_variant=None, default_form="perus")
     headers = [(m.start(), (int(m.group(1)), _year(m.group(2), None)))
                for m in YEARPAIR.finditer(t)]
     headers = [(p, (a, b)) for p, (a, b) in headers if b == a + 1]
+    # "Höstterminen 2026" / "Syyslukukausi 2026" / "Vårterminen 2027" -> lukuvuosi
+    for m in TERM_YEAR.finditer(t):
+        y = int(m.group(2))
+        headers.append((m.start(), (y, y + 1) if m.group(1).lower().startswith(("syys", "höst")) else (y - 1, y)))
+    headers.sort()
     raw = sorted(((m.start(), m.end(), k) for k, rx in KW.items() for m in rx.finditer(t)), key=lambda x: (x[0], -(x[1] - x[0])))
     kws, last_end = [], -1
     for s_, e_, k_ in raw:
@@ -221,6 +233,12 @@ def extract(text: str, want_years=None, want_variant=None, default_form="perus")
                 continue
         if not r:
             r = parse_dates(win, sy)
+            if r:  # päivä löytyi myöhemmältä riviltä, joka koskee toista koulumuotoa ("Esiopetus alkaa 13.8.") -> ohita
+                ap = e + r[3]
+                dl = t[t.rfind("\n", 0, ap) + 1: (t.find("\n", ap) if t.find("\n", ap) >= 0 else len(t))]
+                if t.rfind("\n", 0, ap) > s and OTHER_FORM.search(dl) and not PERUS_RX.search(dl):
+                    r = None
+                    continue
         if not r:  # taulukossa päivä voi olla ennen avainsanaa samalla rivillä
             line_start = t.rfind("\n", 0, s) + 1
             before = t[max(line_start, s - 60):s]

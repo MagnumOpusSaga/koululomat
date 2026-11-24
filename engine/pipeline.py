@@ -13,9 +13,11 @@ from .checks import confidence, plausibility, run_checks
 from .discover import discover
 from .extract_fi import extract
 from . import ai_reader
-from .discover import CONTENT_KW, URL_HIT
+from .discover import CONTENT_KW, SHARE_RX, URL_HIT
 
 AI_MAX_PER_MUN = 4
+AI_EXTRA_STRONG = 3  # lisäkutsut vahvoille ehdokkaille (URL kertoo työ-/loma-ajoista), ettei roskasivu vie kiintiötä
+AI_SKIP = re.compile(r"opisto|uutinen|uutiset|/news|/aktuellt|feedback|formular|anmalan|ilmoittaut|lomake|blankett|kerho|harrastus|byggnad|rakennus|kaava|planlagg", re.I)
 
 KIND_RANK = {"paatos": 0, "lovdata": 0, "forskrift": 0, "kuntasivu": 1, "liite": 2, "wilma": 3, "koulu": 4, "muu": 5}
 MAIN_FIELDS = ("start", "syys", "joulu", "talvi", "end")
@@ -114,8 +116,11 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
         implausible = any(plausibility(country, y, r) for y, r in res.items())
         has_words = bool(CONTENT_KW.search(doc["text"]))
         looks_calendar = has_words or bool(URL_HIT.search(doc["url"]))  # värikoodattu ruudukko: ei lomasanoja tekstissä
-        if ai_reader.available() and ai_calls[0] < AI_MAX_PER_MUN and (doc["flags"].get("grid") or incomplete or implausible) \
-                and looks_calendar and re.search(r"20(26|27|28)", doc["text"] + doc["url"]):
+        strong = bool(URL_HIT.search(doc["url"])) and not AI_SKIP.search(doc["url"])
+        budget = AI_MAX_PER_MUN + (AI_EXTRA_STRONG if strong else 0)
+        rules_good = not incomplete and not implausible
+        if ai_reader.available() and ai_calls[0] < budget and (doc["flags"].get("grid") or incomplete or implausible) \
+                and looks_calendar and not AI_SKIP.search(doc["url"]) and re.search(r"20(26|27|28)", doc["text"] + doc["url"]):
             is_pdf = doc["format"] in ("pdf", "pdf_scan")
             imgs = ai_reader.pdf_pages_png(m["path"], max_pages=3) if is_pdf and (doc["flags"].get("grid") or not has_words or implausible) else []
             ai = ai_reader.read_with_ai(mun["fi"], doc["text"], images=imgs, hard=bool(imgs), years=years, key=fetch.content_hash(doc["text"]))
@@ -123,7 +128,8 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
             ai_res = ai_reader.to_records(ai)
             ai_ok = any(all(k in r for k in ("syys", "joulu", "talvi")) for r in ai_res.values())
             ai_clean = ai_ok and not any(plausibility(country, y, r) for y, r in ai_res.items())
-            if ai_ok and (incomplete or ai_clean or doc["flags"].get("grid")):
+            # sääntölukijan täydellinen ja järkevä tulos voittaa (Kerava: tekoäly palautti vain alun ja lopun)
+            if ai_ok and (incomplete or implausible or (ai_clean and doc["flags"].get("grid") and not rules_good)):
                 res, reader = ai_res, "ai"
             ai_log.append({"url": doc["url"], "ok": ai_ok, "clean": ai_clean, "images": len(imgs), "used": reader == "ai",
                            "error": (ai or {}).get("error")})
@@ -143,7 +149,7 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
         # seuraa liitteet ja Dynasty-sisaret
         if doc["format"] == "html" or doc["flags"].get("attachment_only"):
             for a in attachment_links(doc) + dynasty_siblings(doc["url"]):
-                if a not in read_urls and a not in queue:
+                if a not in read_urls and a not in queue and not SHARE_RX.search(a):
                     queue.insert(i, a)
     out = {"municipality": mun["id"], "name": mun["fi"], "home": disc["home"],
            "pages_crawled": disc["pages_crawled"], "n_candidates": len(disc["candidates"]),

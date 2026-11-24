@@ -101,7 +101,17 @@ def parse_dates(win: str, sy):
                 d1, m1, y1, d2, m2, y2 = m.groups()
                 b = _mk(d2, m2, y2, sy)
                 a = _mk(d1, m1, y1 or (b.year if b and int(m1) <= int(m2) else None), sy)
-                r = (a, b) if a and b and a <= b else None
+                if a and b and a > b and b.year == a.year and int(m2) < int(m1):
+                    try:  # vuoden kirjoitusvirhe välin lopussa ("21.12.2026–6.1.2026")
+                        b = b.replace(year=b.year + 1)
+                    except ValueError:
+                        pass
+                if a and b and (b - a).days >= 200 and int(m1) > int(m2):
+                    try:  # vuoden kirjoitusvirhe välin alussa ("22.12.2026 – 6.1.2028")
+                        a = a.replace(year=b.year - 1)
+                    except ValueError:
+                        pass
+                r = (a, b) if a and b and a <= b and (b - a).days < 200 else None
             elif rx is RANGE_SHORT:
                 d1, d2, mm, yy = m.groups()
                 b = _mk(d2, mm, yy, sy)

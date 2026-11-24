@@ -5,6 +5,7 @@ Arviota ei koskaan esitetä varmana.
 
 Käyttö: python3 build/consolidate.py out out_hold ... > data/fi.json
 """
+import re
 import json
 import sys
 from collections import Counter
@@ -12,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+SOFT = re.compile(r"^(loppu ei pe/la|alku viikolla (30|35))$")  # vain yksittäinen lievä poikkeama
 YEARS = ("2026-2027", "2027-2028")
 FIELDS = ("start", "syys", "joulu", "talvi", "end")
 
@@ -33,8 +35,16 @@ def main(dirs):
         for y in YEARS:
             v = ((r or {}).get("years") or {}).get(y)
             if v and v["checks"].get("plausibility"):
-                review.append({"id": m["id"], "name": m["fi"], "year": y, "issues": v["checks"]["plausibility"], "source": v.get("primary")})
-                v = None  # järkevyyspoikkeama: ei näytetä luettuna, vaan arviona kunnes tarkistettu
+                issues = v["checks"]["plausibility"]
+                review.append({"id": m["id"], "name": m["fi"], "year": y, "issues": issues, "source": v.get("primary")})
+                if len(issues) == 1 and SOFT.match(issues[0]):
+                    # lievä poikkeama (esim. päättyy torstaina): näytetään, mutta enintään "yksi lähde"
+                    if v["confidence"] == "varmistettu":
+                        v = dict(v, confidence="yksi_lähde")
+                else:
+                    v = None  # selvä järkevyyspoikkeama: ei näytetä luettuna, vaan arviona kunnes tarkistettu
+            if v and v["confidence"] == "varmistettu" and any(str(x.get("quote", "")).startswith("[vaihdettu]") for x in v["fields"].values() if isinstance(x, dict)):
+                v = dict(v, confidence="yksi_lähde")  # syys/talvi vaihdettu ruudukon palstoista -> ei koskaan varmistettu
             if v and all(f in v["fields"] for f in ("syys", "joulu", "talvi")):
                 f = v["fields"]
                 rec["years"][y] = {

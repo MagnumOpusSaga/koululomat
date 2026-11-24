@@ -13,7 +13,9 @@ def one(m):
         r = {"municipality": m["id"], "name": m["fi"], "error": repr(e), "years": {}, "sources": []}
     r["secs"] = round(time.time() - t)
     (OUT / f"{m['id']}.json").write_text(json.dumps(r, ensure_ascii=False, indent=1))
-    return m["fi"], r["secs"], [s for s in r.get("sources", []) if s.get("hash")]
+    ai = r.get("ai") or []
+    tag = f" ai={sum(1 for a in ai if a['used'])}/{len(ai)}" + (f" ai_virhe={[a['error'] for a in ai if a.get('error')]}" if any(a.get("error") for a in ai) else "") if ai else ""
+    return m["fi"] + tag, r["secs"], [s for s in r.get("sources", []) if s.get("hash")]
 if __name__ == "__main__":
     muns = json.load(open("fi_municipalities.json"))
     only = set(sys.argv[2:])

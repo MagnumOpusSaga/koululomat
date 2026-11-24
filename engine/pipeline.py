@@ -1,11 +1,12 @@
 """Moottori: kunta -> löytö -> luku -> yhdistäminen -> tarkistukset -> tulos (tietomallin muoto)."""
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from urllib.parse import urlparse
 
 from . import fetch
 from .adapters import attachment_links, classify_source, dynasty_siblings, read, same_site
+from .cal import week_of
 from .checks import confidence, plausibility, run_checks
 from .discover import discover
 from .extract_fi import extract
@@ -60,6 +61,7 @@ def school_form(doc) -> str:
 def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=14, monitor=None, extra_urls=()):
     log = []
     ai_calls = [0]
+    ai_log = []
     disc = discover(mun, log=log)
     cands = [c[0] for c in disc["candidates"]] + list(extra_urls)
     queue = list(dict.fromkeys(list(extra_urls) + cands))[:max_docs]
@@ -93,6 +95,14 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
         obs = obsv[variant]
         res = extract(doc["text"], want_years=set(years), default_form=form)
         reader = "rules"
+        # kaksipalstainen ruudukko: syys- ja talviloma vaihtuvat keskenään (syys keväällä, talvi syksyllä) -> vaihdetaan
+        for y, r in res.items():
+            if "syys" in r and "talvi" in r:
+                ws, wt = week_of(date.fromisoformat(r["syys"]["start"])), week_of(date.fromisoformat(r["talvi"]["start"]))
+                if 6 <= ws <= 14 and 38 <= wt <= 45:
+                    r["syys"], r["talvi"] = dict(r["talvi"]), dict(r["syys"])
+                    for k in ("syys", "talvi"):
+                        r[k]["quote"] = "[vaihdettu] " + r[k].get("quote", "")
         incomplete = not any(all(k in r for k in ("syys", "joulu", "talvi")) for r in res.values())
         # järkevyyspoikkeama (esim. talviloma lokakuussa, Ilmajoki: kaksipalstainen ruudukko) -> tekoäly lukee uudelleen
         implausible = any(plausibility(country, y, r) for y, r in res.items())
@@ -101,7 +111,7 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
         if ai_reader.available() and ai_calls[0] < AI_MAX_PER_MUN and (doc["flags"].get("grid") or incomplete or implausible) \
                 and looks_calendar and re.search(r"20(26|27|28)", doc["text"] + doc["url"]):
             is_pdf = doc["format"] in ("pdf", "pdf_scan")
-            imgs = ai_reader.pdf_pages_png(m["path"], max_pages=3) if is_pdf and (doc["flags"].get("grid") or not has_words) else []
+            imgs = ai_reader.pdf_pages_png(m["path"], max_pages=3) if is_pdf and (doc["flags"].get("grid") or not has_words or implausible) else []
             ai = ai_reader.read_with_ai(mun["fi"], doc["text"], images=imgs, hard=bool(imgs), years=years, key=fetch.content_hash(doc["text"]))
             ai_calls[0] += 1
             ai_res = ai_reader.to_records(ai)
@@ -109,6 +119,8 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
             ai_clean = ai_ok and not any(plausibility(country, y, r) for y, r in ai_res.items())
             if ai_ok and (incomplete or ai_clean or doc["flags"].get("grid")):
                 res, reader = ai_res, "ai"
+            ai_log.append({"url": doc["url"], "ok": ai_ok, "clean": ai_clean, "images": len(imgs), "used": reader == "ai",
+                           "error": (ai or {}).get("error")})
         src = {"url": doc["url"], "kind": kind, "format": doc["format"], "flags": doc["flags"],
                "hash": h[:16], "change": change, "variant": variant, "reader": reader, "years": sorted(res.keys())}
         sources.append(src)
@@ -129,7 +141,7 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
                     queue.insert(i, a)
     out = {"municipality": mun["id"], "name": mun["fi"], "home": disc["home"],
            "pages_crawled": disc["pages_crawled"], "n_candidates": len(disc["candidates"]),
-           "sources": sources, "years": {}}
+           "sources": sources, "ai": ai_log, "years": {}}
     primary = "fi" if obsv.get("fi") else ("sv" if obsv.get("sv") else "fi")
     out["variant"] = primary
     out["years"] = merge_years(obsv.get(primary, {}), years, country, flags_by_url)

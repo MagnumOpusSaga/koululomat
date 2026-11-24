@@ -81,10 +81,17 @@ def icon(kind, size=24, color=None):
             f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{h["icon"]}</svg>')
 
 
-CSS = """@font-face{font-family:Nunito;src:url(/fonts/nunito-latin-wght-normal.woff2) format("woff2");font-weight:200 1000;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215}
-@font-face{font-family:Nunito;src:url(/fonts/nunito-latin-ext-wght-normal.woff2) format("woff2");font-weight:200 1000;font-display:swap;unicode-range:U+0100-02AF,U+1E00-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+# staattiset painot (ei variable-fonttia: iOS Safari piirsi variable-fontin lihavat kirjaimet päällekkäin dynaamisessa listassa)
+CSS = """@font-face{font-family:Nunito;src:url(/fonts/nunito-latin-400-normal.woff2) format("woff2");font-weight:400;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215}
+@font-face{font-family:Nunito;src:url(/fonts/nunito-latin-ext-400-normal.woff2) format("woff2");font-weight:400;font-style:normal;font-display:swap;unicode-range:U+0100-02AF,U+1E00-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:Nunito;src:url(/fonts/nunito-latin-700-normal.woff2) format("woff2");font-weight:700;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215}
+@font-face{font-family:Nunito;src:url(/fonts/nunito-latin-ext-700-normal.woff2) format("woff2");font-weight:700;font-style:normal;font-display:swap;unicode-range:U+0100-02AF,U+1E00-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:Nunito;src:url(/fonts/nunito-latin-800-normal.woff2) format("woff2");font-weight:800;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215}
+@font-face{font-family:Nunito;src:url(/fonts/nunito-latin-ext-800-normal.woff2) format("woff2");font-weight:800;font-style:normal;font-display:swap;unicode-range:U+0100-02AF,U+1E00-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:Nunito;src:url(/fonts/nunito-latin-900-normal.woff2) format("woff2");font-weight:900;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215}
+@font-face{font-family:Nunito;src:url(/fonts/nunito-latin-ext-900-normal.woff2) format("woff2");font-weight:900;font-style:normal;font-display:swap;unicode-range:U+0100-02AF,U+1E00-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
-body{margin:0;font:17px/1.55 Nunito,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#2A1B0F;background:var(--tint,#FFF6E5);font-variant-numeric:tabular-nums}
+body{margin:0;font:17px/1.55 Nunito,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-synthesis:none;color:#2A1B0F;background:var(--tint,#FFF6E5);font-variant-numeric:tabular-nums}
 a{color:#9A3D06}a:hover{color:#7A3005}:focus-visible{outline:3px solid #1D6FB8;outline-offset:2px}
 .wrap{max-width:1160px;margin:0 auto;padding:0 20px}
 .pv{background:#FFE08A;padding:8px 20px;font-size:14px;font-weight:700;text-align:center}
@@ -98,7 +105,7 @@ header.top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:16px 
 .aco{display:flex;flex-direction:column;justify-content:center;min-height:56px;padding:6px 16px;border-radius:16px;text-decoration:none;color:#2A1B0F}
 .aco b{font-size:18px;font-weight:800}.aco b small{font-weight:700;color:#6B5847}.aco span{font-size:14px;font-weight:700;color:#6B5847}.aco mark{background:none;color:inherit;font-weight:900;text-decoration:underline;text-decoration-color:#E8741E;text-decoration-thickness:3px}
 .aco.on,.aco:hover{background:#FFF0D6;color:#2A1B0F}.acn{padding:12px 16px;font-weight:700;color:#6B5847}
-.search.big{max-width:none;margin:0;flex:none;width:100%}.search.big input{height:60px;font-size:19px;padding:0 24px}
+.search.lg{max-width:none;margin:0;flex:none;width:100%}.search.lg input{height:60px;font-size:19px;padding:0 24px}
 .hh{font-size:36px;line-height:1.1;margin:10px 0 4px}.sub{font-size:19px;font-weight:700;color:#5F4B3A;margin:0 0 16px}
 .trust{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;font-weight:800;color:#6B5847;margin:14px 0 28px}
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
@@ -155,7 +162,7 @@ footer.bot{padding:26px 0 40px;font-size:14px;color:#6B5847;text-align:center}
 
 def search_form(fid, placeholder="Mikä on sinun kuntasi?", big=False, prefix=None, main=False):
     pre = f' data-prefix="{prefix}"' if prefix else ""
-    return (f'<form class="search{" big" if big else ""}" action="/haku/" role="search"{pre}{" data-main" if main else ""}>'
+    return (f'<form class="search{" lg" if big else ""}" action="/haku/" role="search"{pre}{" data-main" if main else ""}>'
             f'<label class="sr" for="{fid}">Hae kuntaa</label><div class="ac"><input id="{fid}" name="q" type="search" placeholder="{placeholder}" '
             f'role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="{fid}-l" autocomplete="off" autocapitalize="words" spellcheck="false">'
             f'<div class="acl" id="{fid}-l" role="listbox" hidden></div></div></form>')
@@ -174,7 +181,7 @@ def page(title, desc, body, path, schema=None, theme="brand", top_search=True):
 <title>{html.escape(title)}</title><meta name="description" content="{html.escape(desc)}">{robots}
 <link rel="canonical" href="{BASE}{path}"><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-180.png"><link rel="manifest" href="/site.webmanifest"><meta name="theme-color" content="{THEME[theme][0]}">
-<link rel="preload" href="/fonts/nunito-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/nunito-latin-900-normal.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/fonts/nunito-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
 <style>{CSS}</style>{sd}<script src="/ac.js" defer></script></head><body style="{theme_style(theme)}">{pv}
 <div class="wrap"><header class="top"><a class="brand" href="/">{LOGO.format(s=40)}<b>Koulu<span>lomat</span></b></a>
 {search_form("q") if top_search else ""}</header>

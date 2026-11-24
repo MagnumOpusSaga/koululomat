@@ -2,7 +2,7 @@
 löydä tai tarkistukset hylkäävät. Avain ympäristömuuttujasta ANTHROPIC_API_KEY (GitHub-salaisuus),
 ei koskaan koodiin tai dokumentteihin. Kuvat (kalenteriruudukot) luetaan visiolla.
 
-HUOM: ei testattu 24.11.2026 (avainta ei ollut työtilassa). Muoto sama kuin paivanlounaan ai_reader.py.
+24.11.: max_tokens 1500 katkaisi vastauksia (json-virhe ~70 %:ssa kunnista) -> 4096, virheitä ei välimuistiin.
 """
 import base64
 import json
@@ -13,7 +13,7 @@ from pathlib import Path
 
 MODEL_FAST = os.environ.get("KOULULOMAT_MODEL_FAST", "claude-haiku-5-5")
 MODEL_HARD = os.environ.get("KOULULOMAT_MODEL_HARD", "claude-sonnet-5-5")
-PROMPT_VERSION = "kl-1"
+PROMPT_VERSION = "kl-2"
 
 SYSTEM = """Luet kunnan koulujen työ- ja loma-ajat dokumentista. Palauta VAIN JSON:
 {"kunta_oikein": true|false, "dokumentti_kunta": "...", "tila": "päätetty"|"ehdotus",
@@ -21,11 +21,13 @@ SYSTEM = """Luet kunnan koulujen työ- ja loma-ajat dokumentista. Palauta VAIN J
    "alku": "YYYY-MM-DD", "syyslukukausi_loppu": "YYYY-MM-DD", "kevatlukukausi_alku": "YYYY-MM-DD",
    "loppu": "YYYY-MM-DD", "syysloma": ["YYYY-MM-DD","YYYY-MM-DD"], "joululoma": [...],
    "talviloma": [...], "paasiaisloma": [...], "vapaapaivat": ["YYYY-MM-DD"], "lauantaikoulupaivat": ["YYYY-MM-DD"],
-   "koulupaivia_ilmoitettu": 190, "lainaukset": {"syysloma": "lyhyt kohta tekstistä", ...}, "sivu": {"syysloma": 1}}}}
+   "koulupaivia_ilmoitettu": 190, "lainaukset": {"syysloma": "enintään 8 sanaa tekstistä", ...}}}}
 Säännöt: älä arvaa. Jos päivää ei lue dokumentissa, jätä kenttä pois. Tarkista, että dokumentti koskee
 kuntaa {kunta} eikä toista kuntaa tai yksittäistä koulua. Jos dokumentissa lukee ehdotus/luonnos/förslag/
 forslag tai päivät ovat muotoa xx.xx, tila = ehdotus. Kalenteriruudukossa koodit: HF=høstferie, JF=juleferie,
-VF=vinterferie, PF=påskeferie, SF/EF=sommer/elevfri; värikoodit selitteen mukaan."""
+VF=vinterferie, PF=påskeferie, SF/EF=sommer/elevfri; värikoodit selitteen mukaan. Kaksipalstaisessa
+ruudukossa syksy (elo–joulu) ja kevät (tammi–kesä) ovat eri palstoissa: syysloma on loka-marraskuussa, talviloma helmi-maaliskuussa.
+Ei selityksiä, ei koodilohkoja: vastaus alkaa merkillä { ja päättyy merkkiin }."""
 
 
 def _client():
@@ -57,20 +59,33 @@ def read_with_ai(kunta: str, text: str = "", images=(), hard=False, years=("2026
     import hashlib
     ck = CACHE / ("ai_" + hashlib.sha1(f"{PROMPT_VERSION}|{hard}|{kunta}|{key or text[:20000]}|{len(images)}".encode()).hexdigest() + ".json")
     if ck.exists():
-        return json.loads(ck.read_text())
+        cached = json.loads(ck.read_text())
+        if not cached.get("error"):
+            return cached
     content = []
     for img in images[:4]:
         content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png",
                                                      "data": base64.b64encode(Path(img).read_bytes()).decode()}})
     content.append({"type": "text", "text": f"Kunta: {kunta}. Lukuvuodet: {', '.join(years)}.\n\n{text[:14000]}"})
-    msg = c.messages.create(model=MODEL_HARD if hard else MODEL_FAST, max_tokens=1500,
-                            system=SYSTEM.replace("{kunta}", kunta),
-                            messages=[{"role": "user", "content": content}])
+    import time
+    msg = None
+    for attempt in range(4):
+        try:
+            msg = c.messages.create(model=MODEL_HARD if hard else MODEL_FAST, max_tokens=4096,
+                                    system=SYSTEM.replace("{kunta}", kunta),
+                                    messages=[{"role": "user", "content": content}])
+            break
+        except Exception as e:  # ylikuorma / rajoitus: odota ja yritä uudelleen
+            err = type(e).__name__
+            time.sleep(5 * (attempt + 1))
+    if msg is None:
+        return {"error": f"api {err}"}
     raw = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
     try:
         out = json.loads(raw[raw.find("{"): raw.rfind("}") + 1])
     except Exception:
-        out = {"error": "json", "raw": raw[:500]}
+        # virheellistä vastausta ei tallenneta välimuistiin -> luetaan uudelleen seuraavalla ajolla
+        return {"error": f"json ({msg.stop_reason}, {msg.usage.output_tokens} t)", "raw": raw[-300:]}
     out["_usage"] = {"in": msg.usage.input_tokens, "out": msg.usage.output_tokens, "model": msg.model}
     CACHE.mkdir(parents=True, exist_ok=True)
     ck.write_text(json.dumps(out, ensure_ascii=False))

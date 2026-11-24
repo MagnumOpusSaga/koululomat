@@ -1,0 +1,40 @@
+name: Koululomat deploy (ulkoasu)
+# Rakentaa sivuston uudelleen viimeisimmän päivitysajon datasta – ei hae kuntia uudelleen.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "build/**"
+      - "functions/**"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Viimeisimmän päivitysajon data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN=$(gh run list -R "$GITHUB_REPOSITORY" --workflow update.yml --status success -L 1 --json databaseId -q '.[0].databaseId')
+          if [ -z "$RUN" ]; then echo "Ei onnistunutta päivitysajoa vielä – ohitetaan."; echo "SKIP=1" >> "$GITHUB_ENV"; exit 0; fi
+          mkdir -p data_dl && gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n data -D data_dl
+          cp data_dl/fi.json data/fi.json
+      - if: env.SKIP != '1'
+        run: PREVIEW=${{ vars.PREVIEW || '1' }} python3 build/build_site.py data/fi.json site
+      - if: env.SKIP != '1'
+        name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler@3 pages deploy site --project-name koululomat --branch main

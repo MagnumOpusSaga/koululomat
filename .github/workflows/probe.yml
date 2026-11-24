@@ -1,0 +1,36 @@
+name: Koululomat probe (vianetsintä, ei julkaisua)
+on:
+  workflow_dispatch:
+    inputs:
+      ids:
+        description: "Kuntanumerot välilyönnillä erotettuna"
+        required: true
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-fin tesseract-ocr-swe
+      - run: pip install requests beautifulsoup4 lxml anthropic
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            cache
+            state
+          key: fetch-probe-${{ github.run_id }}
+          restore-keys: fetch-
+      - name: Probe
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+          KOULULOMAT_CONTACT: ${{ vars.KOULULOMAT_CONTACT }}
+          DUMP_DOCS: "1"
+        run: python3 run_all.py fi ${{ inputs.ids }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probe
+          path: out_all/

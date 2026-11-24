@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 """Moottori: kunta -> löytö -> luku -> yhdistäminen -> tarkistukset -> tulos (tietomallin muoto)."""
 import re
 from collections import Counter, defaultdict
@@ -81,6 +83,10 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
         if not doc.get("text"):
             sources.append({"url": url, "error": doc.get("error")})
             continue
+        if os.environ.get("DUMP_DOCS"):  # vianetsintä: talleta luettu teksti
+            dd = Path("out_all/dump") / mun["id"]
+            dd.mkdir(parents=True, exist_ok=True)
+            (dd / f"{i:02d}.txt").write_text(f"URL: {doc['url']}\nFLAGS: {doc.get('flags')}\n\n" + doc["text"][:20000], encoding="utf-8")
         if not about_this_municipality(doc, mun, disc["home"]):
             sources.append({"url": url, "skipped": "toinen kunta"})
             continue
@@ -141,7 +147,7 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
                     queue.insert(i, a)
     out = {"municipality": mun["id"], "name": mun["fi"], "home": disc["home"],
            "pages_crawled": disc["pages_crawled"], "n_candidates": len(disc["candidates"]),
-           "sources": sources, "ai": ai_log, "years": {}}
+           "sources": sources, "ai": ai_log, "log": log if os.environ.get("DUMP_DOCS") else None, "years": {}}
     primary = "fi" if obsv.get("fi") else ("sv" if obsv.get("sv") else "fi")
     out["variant"] = primary
     out["years"] = merge_years(obsv.get(primary, {}), years, country, flags_by_url)

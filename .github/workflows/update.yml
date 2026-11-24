@@ -29,7 +29,7 @@ jobs:
           KOULULOMAT_CONTACT: ${{ vars.KOULULOMAT_CONTACT }}
         run: python3 run_all.py fi
       - run: python3 build/consolidate.py out_all > data/fi.json
-      - run: PREVIEW=${{ vars.PREVIEW || '1' }} python3 build/build_site.py data/fi.json site
+      - run: PREVIEW=${{ vars.SITE_PREVIEW || '0' }} python3 build/build_site.py data/fi.json site
       - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -31,7 +31,7 @@ jobs:
           mkdir -p data_dl && gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n data -D data_dl
           cp data_dl/fi.json data/fi.json
       - if: env.SKIP != '1'
-        run: PREVIEW=${{ vars.PREVIEW || '1' }} python3 build/build_site.py data/fi.json site
+        run: PREVIEW=${{ vars.SITE_PREVIEW || '0' }} python3 build/build_site.py data/fi.json site
       - if: env.SKIP != '1'
         name: Deploy
         env:

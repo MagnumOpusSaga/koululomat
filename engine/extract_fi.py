@@ -16,14 +16,14 @@ FIELDS = {
     "joulu": r"joululoma\w*|jullov\w*",
     "talvi": r"talviloma\w*|hiihtoloma\w*|sportlov\w*|vinterlov\w*|talvilomaviik\w*",
     "paasiainen": r"pääsiäisloma\w*|påsklov\w*",
-    "term1_end": r"syys(luku)?kauden\s+päättäjäi\w*|joulujuhla\w*|syys(luku)?kausi\s+päättyy|hösttermin(en)?\s+(slutar|avslutas)",
-    "term2_start": r"vårtermin(en)?\s+inleds|kevät(luku)?kausi\s+alkaa|vårtermin(en)?\s+börjar",
-    "start": r"syy\w{0,2}lukukausi\s+alkaa|koulun\s+alkaminen|hösttermin(en)?\s+inleds|(?<!esi)opetus\s+alkaa|syys(luku)?kausi\s+alkaa|undervisningen\s+börjar|hösttermin(en)?\s+börjar|koulu(t|työ|työt)?\s+alka(a|vat)|lukuvuosi\s+alkaa|työt\s+alkavat|skol(an|arbetet)\s+börjar|läsåret\s+börjar|ensimmäinen\s+koulupäivä|första\s+skoldag\w*",
+    "term1_end": r"syys(luku)?kauden\s+päättäjäi\w*|joulujuhla\w*|syys(luku)?kausi\s+päättyy|hösttermin(en)?\s+(slutar|avslutas)|sista\s+skoldag(en)?\s+(på|före|inför)\s+(hösten|jul\w*)|höstterminens\s+sista\s+\w*dag",
+    "term2_start": r"vårtermin(en)?\s+inleds|kevät(luku)?kausi\s+alkaa|vårtermin(en)?\s+(börjar|startar)",
+    "start": r"syy\w{0,2}lukukausi\s+alkaa|koulun\s+alkaminen|hösttermin(en)?\s+inleds|(?<!esi)opetus\s+alkaa|syys(luku)?kausi\s+alkaa|undervisningen\s+börjar|hösttermin(en)?\s+(börjar|startar)|koulu(t|työ|työt)?\s+alka(a|vat)|lukuvuosi\s+alkaa|työt\s+alkavat|skol(an|arbetet)\s+börjar|läsåret\s+börjar|ensimmäinen\s+koulupäivä|första\s+skoldag\w*",
     "end": r"lukuvuoden\s+viimeinen\s+(työ|koulu)päivä|(?<=\d)\s+ja\s+päättyy|(?<=\d)\s+ja\s+päättyvät|kevät(luku)?kausi\s+päättyy|läsårets\s+sista\s+(arbets|skol)dag|vårtermin(en)?\s+(slutar|avslutas)|lukuvuosi\s+päättyy|koulu(t|työ|työt)?\s+päätty(y|vät)|lukuvuoden\s+päät\w*|läsåret\s+(slutar|avslutas)|skolavslutning\w*|viimeinen\s+koulupäivä|sista\s+skoldag\w*|kevätjuhla\w*",
     "saturday": r"lauantai(koulu|työ)?päiv\w*|työlauantai\w*|koulupäivä(nä)?\s+lauantai\w*|lauantaina\s+koulupäivä|lördag(en)?\s+(är\s+)?(en\s+)?skoldag|skoldag\s+lördag\w*|arbetslördag\w*",
     "kesa": r"kesäloma\w*|sommarlov\w*",
     "generic_start": r"(?:^|(?<=\n))[ \t]*alkaa\b",
-    "generic_end": r"(?<=\d)\s+och\s+avslutas|(?:^|(?<=\n))[ \t]*päättyy\b|(?<![a-zäö])lukukausi\s+päättyy",
+    "generic_end": r"(?<=\d)\s+och\s+avslutas|(?<![a-zåäö])avslutning(?!\w)|(?:^|(?<=\n))[ \t]*päättyy\b|(?<![a-zäö])lukukausi\s+päättyy",
     "free": r"helatorstain\s+(jälkeinen|jälkeisenä|seuraava)\s+perjantai\w*|helavapaa\w*|vapaapäiv\w*|ylimääräi\w*\s+vapaa\w*|lomapäiv\w*|ledig\s+dag|lovdag\w*",
 }
 KW = {k: re.compile(v, re.I) for k, v in FIELDS.items()}
@@ -173,6 +173,9 @@ def _section_at(sections, p):
     return cur[1], cur[2]
 
 
+DATE_FIRST = re.compile(r"^\s*\d{1,2}\.\s*(\d{1,2}\.)?\s*(\d{2,4})?\s*[–-]?\s*\d{0,2}")
+
+
 def extract(text: str, want_years=None, want_variant=None, default_form="perus") -> dict:
     """-> {'2026-2027': {field: {'start','end','quote'}}, ...}"""
     t = _norm(text)
@@ -196,6 +199,10 @@ def extract(text: str, want_years=None, want_variant=None, default_form="perus")
         line = t[ls:le if le > 0 else len(t)]
         if OTHER_FORM.search(line) and not PERUS_RX.search(line):
             continue  # rivi koskee esiopetusta/lukiota ("esiopetuksen syyslukukausi päättyy …")
+        sy = None
+        for p, pair in headers:
+            if p <= s:
+                sy = pair
         nxt = kws[i + 1][0] if i + 1 < len(kws) else len(t)
         # ikkuna avainsanan jälkeen seuraavaan avainsanaan asti (max 140 merkkiä)
         win = t[e:min(nxt, e + 140)]
@@ -203,7 +210,17 @@ def extract(text: str, want_years=None, want_variant=None, default_form="perus")
         for p, pair in headers:
             if p <= s:
                 sy = pair
-        r = parse_dates(win, sy)
+        # "13.8.2026 (to) Skolan börjar" – päivä rivin alussa ja avainsanan jälkeen ei päivää samalla rivillä
+        line_rest = t[e:le if le > 0 else len(t)]
+        head = t[ls:s]
+        r = None
+        date_first = bool(DATE_FIRST.match(head)) and head.strip()[:1].isdigit() and not parse_dates(line_rest, sy)
+        if date_first:
+            r = parse_dates(head, sy)
+            if not r:
+                continue
+        if not r:
+            r = parse_dates(win, sy)
         if not r:  # taulukossa päivä voi olla ennen avainsanaa samalla rivillä
             line_start = t.rfind("\n", 0, s) + 1
             before = t[max(line_start, s - 60):s]

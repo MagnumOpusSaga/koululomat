@@ -80,3 +80,27 @@
     if (m && f.hasAttribute("data-main")) { i.value = decodeURIComponent(m[1].replace(/\+/g, " ")); load().then(render); }
   });
 })();
+
+/* Jakonappi: puhelimessa avaa jakovalikon (WhatsApp, viestit…), muuten kopioi linkin. Ei seurantaparametreja. */
+(function () {
+  document.querySelectorAll("button.share").forEach(function (b) {
+    b.hidden = false;
+    b.addEventListener("click", function () {
+      var cd = document.getElementById("cd"), txt = b.getAttribute("data-text") || document.title;
+      if (cd && b.getAttribute("data-hol")) {
+        var n = parseInt(cd.textContent, 10);
+        txt = b.getAttribute("data-name") + ": " + b.getAttribute("data-hol") + "an " + n + " " + (n === 1 ? "yö" : "yötä") + "!";
+      }
+      var url = location.origin + location.pathname;
+      if (navigator.share) {
+        navigator.share({ title: document.title, text: txt, url: url }).catch(function () {});
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(txt + " " + url).then(function () {
+          var l = b.querySelector("span"), o = l.textContent;
+          l.textContent = "Linkki kopioitu!";
+          setTimeout(function () { l.textContent = o; }, 2200);
+        });
+      }
+    });
+  });
+})();

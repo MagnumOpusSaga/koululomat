@@ -120,6 +120,7 @@ h2{font-size:22px;font-weight:900;margin:0 0 10px}
 .hero .lead{font-size:20px;font-weight:800;margin:6px 0 0}
 .hero .big{font-size:120px;line-height:.95;font-weight:900;letter-spacing:-.03em}
 .hero .unit{font-size:30px;font-weight:900;margin:0}
+.share{display:inline-flex;align-items:center;gap:8px;min-height:48px;margin:12px 0 4px;padding:0 20px;border-radius:99px;border:2px solid currentColor;background:rgba(255,255,255,.18);color:inherit;font:900 17px Nunito,system-ui;cursor:pointer}.share:hover{background:rgba(255,255,255,.3)}.share[hidden]{display:none}
 .hero .when{font-size:19px;font-weight:800;margin:8px 0 0}
 .bar{width:100%;max-width:420px;margin-top:14px}.bar>div{height:18px;border-radius:99px;background:var(--track,rgba(255,255,255,.3));overflow:hidden}
 .bar i{display:block;height:100%;border-radius:99px;background:var(--bar,#FFE08A)}.bar p{margin:6px 0 0;font-size:19px;font-weight:800}
@@ -209,6 +210,16 @@ def holidays_of(rec):
     return sorted(out, key=lambda h: h[1])
 
 
+SHARE_SVG = ('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" '
+             'stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>'
+             '<path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>')
+
+
+def share_btn(name, hol=None, text=None):
+    attrs = f' data-name="{html.escape(name)}"' + (f' data-hol="{hol}"' if hol else "") + (f' data-text="{html.escape(text)}"' if text else "")
+    return f'<button class="share" type="button" hidden{attrs}>{SHARE_SVG}<span>Jaa kaverille</span></button>'
+
+
 def hero(rec, today):
     allh = holidays_of(rec)
     nxt = [h for h in allh if h[2] >= today]
@@ -233,10 +244,10 @@ def hero(rec, today):
     when = (f"alkaa {fmt(a.isoformat())}" if k == "kesa" else fmt(a.isoformat(), b.isoformat())) + \
            (f" · viikko {week(a.isoformat())}" if k in ("syys", "talvi") else "")
     if ongoing:
-        body = f'<p class="lead">{name} on nyt!</p><div class="big" aria-hidden="true">🎉</div>'
+        body = f'<p class="lead">{name} on nyt!</p><div class="big" aria-hidden="true">🎉</div>{share_btn(rec["name"], text=f"{rec['name']}: {name.lower()} on nyt!")}'
     else:
         body = (f'<p class="lead">{name}an on</p><div class="big" id="cd" data-d="{a.isoformat()}">{n}</div>'
-                f'<p class="unit">{yo(n)}!</p>')
+                f'<p class="unit">{yo(n)}!</p>{share_btn(rec["name"], hol=name.lower())}')
     est = conf == "arvio"
     return (f'<section class="hero{" est" if est else ""}" aria-label="Lähtölaskuri">{icon(k, 64, "currentColor")}{body}'
             f'<p class="when">{when}{" (arvio)" if est else ""}</p><p style="margin:6px 0 0">{badge(conf)}</p>{bar}</section>')
@@ -396,7 +407,7 @@ def build(data_path, out_dir):
             n = nights(d(tal["start"]), today)
             est = yv["confidence"] == "arvio"
             hb = (f'<h1>Hiihtoloma 2027 – {rec["name"]}</h1><section class="hero{" est" if est else ""}">{icon("talvi", 64, "currentColor")}'
-                  f'<p class="lead">Hiihtolomaan on</p><div class="big" id="cd" data-d="{tal["start"]}">{n}</div><p class="unit">{yo(n)}!</p>'
+                  f'<p class="lead">Hiihtolomaan on</p><div class="big" id="cd" data-d="{tal["start"]}">{n}</div><p class="unit">{yo(n)}!</p>{share_btn(rec["name"], hol="hiihtoloma")}'
                   f'<p class="when">{fmt(tal["start"], tal["end"])} · viikko {week(tal["start"])}{" (arvio)" if est else ""}</p>'
                   f'<p style="margin:6px 0 0">{badge(yv["confidence"])}</p></section>'
                   f'<div class="btns"><a class="btn" href="/fi/{s}/lomat.ics">Lisää kalenteriin</a><a class="btn alt" href="/fi/{s}/">Kaikki lomat: {rec["name"]}</a>'

@@ -14,7 +14,7 @@ from .adapters import read, same_site
 
 URL_HIT = re.compile(r"lukukaudet|lukukausi-?ja|loma-?aj|tyo-?ja-?vapaa|työ-?ja-?vapaa|tyopaivat|työpäivät|lukuvuositiedote|tyo-?ja-?loma|työ-?ja-?loma|lukuvuo\w*-?(tyo|työ|aj|lom)|koulujen-?loma|"
                      r"lukuvuosi|lukuvuoden|tyoajat|loma-ajat|arbets-?och-?(lov|ledighet)|lasarstider|läsårstider|"
-                     r"lasarets|skollov|lov-?och|lasar-?\d|lukuvuosi-?\d", re.I)
+                     r"lasarets|skollov|lov-?och|lasar-?\d|lukuvuosi-?\d|arbetsdag|lovdag|arbets-?och-?lov|skolornas-?arbet|arbetstider", re.I)
 NAV_HIT = re.compile(r"kasvatus|opetus|koulu|perusopetus|oppilaitokset|lukuvuo|loma|utbildning|skol|"
                      r"bildning|sivistys|lapset|perheet|education|school", re.I)
 SKIP = re.compile(r"\.(jpg|jpeg|png|gif|svg|css|js|zip|mp4|mp3|ics|xml)(\?|$)|/(en|ru|uk|ar|so)/|"
@@ -153,7 +153,7 @@ def discover(mun: dict, max_pages=45, log=None) -> dict:
             school_channel = re.search(r"peda\.net/" + re.escape(slug(mun["fi"])) + r"|" + re.escape(slug(mun["fi"])) + r"\.inschool\.fi", href, re.I)
             if school_channel and depth < 2:
                 q.append((href, depth + 1))  # koulun omat kanavat (Peda.net, Wilman julkiset tiedotteet)
-            if URL_HIT.search(href) or re.search(r"loma-?aj|työ- ja loma|työ- ja vapaa|lukukaudet ja lomat|lukuvuo|läsårstid|arbets- och lov|arbetstider|skollov|lov och|lovdagar", txt, re.I):
+            if URL_HIT.search(href) or re.search(r"loma-?aj|työ- ja loma|työ- ja vapaa|lukukaudet ja lomat|lukuvuo|läsårstid|arbets- och lov|arbetstider|skollov|lov och|lovdagar|arbetsdagar|arbets- och lov|skolornas arbets", txt, re.I):
                 add(href, 7, "linkki:" + txt[:40])
                 if onsite:
                     q.appendleft((href, depth + 1))

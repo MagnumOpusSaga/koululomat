@@ -15,6 +15,9 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import articles  # noqa: E402
+
 PREVIEW = os.environ.get("PREVIEW", "1") == "1"
 BASE = os.environ.get("SITE_URL", "https://koululomat.fi")
 OWNER = "BR Entertainment (Y-tunnus 3183394-5)"
@@ -155,6 +158,7 @@ form textarea,details input{width:100%;padding:10px 12px;border:2px solid #F0D9B
 .list a{text-decoration:none;font-weight:700;color:#2A1B0F;display:inline-block;min-height:28px}.list a:hover{color:#9A3D06}
 .wk{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
 footer.bot{padding:26px 0 40px;font-size:14px;color:#6B5847;text-align:center}
+""" + articles.CSS + """
 @media(min-width:900px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}.hh{font-size:48px}h1{font-size:40px}.hero .big{font-size:160px}.hero{padding:36px}}
 @media(max-width:420px){.hero .big{font-size:104px}.card{padding:14px}}"""
 
@@ -440,6 +444,12 @@ def build(data_path, out_dir):
             return None
         return d(f[k]["start"]), d(f[k]["end"]), v["confidence"]
 
+    arts = articles.build_articles(data, today, write, {"page": page, "search_form": search_form, "icon": icon, "share_btn": share_btn, "HOL": HOL, "BASE": BASE})
+    urls += [a["path"] for a in arts]
+    acards = "".join(f'<a class="acard" href="{a["path"]}" style="--c:{HOL[a["k"]]["c"]}"><div class="ic" style="background:{HOL[a["k"]]["bg"]};flex:none">{icon(a["k"], 26)}</div>'
+                     f'<div><b>{a["title"]}</b><span>{a["sub"]}</span></div></a>' for a in arts)
+    ART_LINK = {a["k"]: f'<h2 style="margin-top:30px">Lue myös</h2><div class="acards">{acards.split("</a>")[i]}</a></div>' for i, a in enumerate(arts)}
+
     summary = {}
     for k in ("syys", "joulu", "talvi", "kesa"):
         groups = defaultdict(list)
@@ -488,6 +498,8 @@ def build(data_path, out_dir):
               f'<div style="display:flex;align-items:center;gap:12px">{icon(k, 44, "currentColor")}<h1 style="margin:0;color:inherit">{label} kunnittain</h1></div>'
               f'<p class="lead" style="margin:10px 0 16px">{intro}</p>{search_form("q2", "Kirjoita kuntasi", big=True, prefix="/fi/hiihtoloma-2027/" if k == "talvi" else None)}</section>'
               f'<div class="wk" style="margin-top:22px">{cols}</div>')
+        if k in ART_LINK:
+            hb += ART_LINK[k]
         write(path, page(f"{label} kunnittain – kaikki Suomen kunnat | Koululomat",
                          f"{label}: koulujen loma-ajat kaikissa Suomen kunnissa. Tiedot kuntien omista lähteistä.", hb, path, theme=k, top_search=False))
         urls.append(path)
@@ -503,6 +515,7 @@ def build(data_path, out_dir):
             f'{search_form("q2", big=True)}'
             f'<p class="trust"><span class="b ok">✓ Kunnan oma lähde</span>{n_ok}/{len(data)} kuntaa</p>'
             f'<h2>Tai katso loma kerrallaan</h2><div class="tiles">{tiles}</div>'
+            f'<h2 style="margin-top:30px">Ajankohtaista</h2><div class="acards">{acards}</div>'
             f'<h2 style="margin-top:30px">Kaikki kunnat</h2><div class="letters">{letters}</div>')
     write("/", page("Koulujen lomat kunnittain 2026–2027 – syysloma, joululoma, hiihtoloma | Koululomat",
                     "Montako yötä lomaan? Koulujen syys-, joulu- ja hiihtolomat jokaisessa Suomen kunnassa. Tiedot kuntien omista lähteistä.",

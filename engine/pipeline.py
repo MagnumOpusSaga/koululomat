@@ -103,17 +103,13 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
         obs = obsv[variant]
         res = extract(doc["text"], want_years=set(years), default_form=form)
         reader = "rules"
-        # kaksipalstainen ruudukko: syys- ja talviloma vaihtuvat keskenään (syys keväällä, talvi syksyllä) -> vaihdetaan
-        for y, r in res.items():
-            if "syys" in r and "talvi" in r:
-                ws, wt = week_of(date.fromisoformat(r["syys"]["start"])), week_of(date.fromisoformat(r["talvi"]["start"]))
-                if 6 <= ws <= 14 and 38 <= wt <= 45:
-                    r["syys"], r["talvi"] = dict(r["talvi"]), dict(r["syys"])
-                    for k in ("syys", "talvi"):
-                        r[k]["quote"] = "[vaihdettu] " + r[k].get("quote", "")
+        # kaksipalstainen ruudukko: syys keväällä ja talvi syksyllä = palstat sekaisin -> päivät ovat todennäköisesti
+        # myös väärin (Ilmajoki: talvi 5.10.). Ei vaihdeta, vaan merkitään epäjärkeväksi -> tekoäly lukee kuvana.
+        swapped_grid = any("syys" in r and "talvi" in r and 6 <= week_of(date.fromisoformat(r["syys"]["start"])) <= 14
+                           and 38 <= week_of(date.fromisoformat(r["talvi"]["start"])) <= 45 for r in res.values())
         incomplete = not any(all(k in r for k in ("syys", "joulu", "talvi")) for r in res.values())
         # järkevyyspoikkeama (esim. talviloma lokakuussa, Ilmajoki: kaksipalstainen ruudukko) -> tekoäly lukee uudelleen
-        implausible = any(plausibility(country, y, r) for y, r in res.items())
+        implausible = any(plausibility(country, y, r) for y, r in res.items()) or swapped_grid
         has_words = bool(CONTENT_KW.search(doc["text"]))
         looks_calendar = has_words or bool(URL_HIT.search(doc["url"]))  # värikoodattu ruudukko: ei lomasanoja tekstissä
         strong = bool(URL_HIT.search(doc["url"])) and not AI_SKIP.search(doc["url"])

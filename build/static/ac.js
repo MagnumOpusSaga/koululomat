@@ -1,6 +1,6 @@
 /* Koululomat: kuntahaun ennakoivat ehdotukset. Ei evästeitä, ei seurantaa, ei ulkoisia kutsuja. */
 (function () {
-  var D = null, P = null;
+  var D = null, P = null, SV = document.documentElement.lang === "sv";
   function n(v) {
     return (v || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
       .replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -28,7 +28,7 @@
     var i = f.querySelector("input"), L = f.querySelector(".acl"), items = [], a = -1;
     var pre = f.getAttribute("data-prefix"), pickMode = f.hasAttribute("data-pick");
     if (!i || !L) return;
-    function url(x) { return pre && x.t ? pre + x.s + "/" : "/fi/" + x.s + "/"; }
+    function url(x) { return SV && x.ss ? "/sv/" + x.ss + "/" : pre && x.t ? pre + x.s + "/" : "/fi/" + x.s + "/"; }
     function pick(x) {  // vertailusivu: valinta täyttää kentän eikä siirry sivulle
       i.value = x.n; close();
       f.dispatchEvent(new CustomEvent("kuntapick", { detail: x, bubbles: true }));
@@ -47,19 +47,24 @@
         else if (x.k.indexOf(q) > 0 || (x.k2 && x.k2.indexOf(q) > 0)) inc.push(x);
       });
       items = st.concat(inc).slice(0, 6);
+      if (SV) {  // svenska: kommuner med svensk sida först
+        items = st.concat(inc).sort(function (p, q) { return (q.ss ? 1 : 0) - (p.ss ? 1 : 0); }).slice(0, 6);
+      }
       if (!items.length) {
-        L.innerHTML = '<div class="acn">Kuntaa ei löytynyt – tarkista kirjoitusasu.</div>';
+        L.innerHTML = '<div class="acn">' + (SV ? "Ingen kommun hittades – kontrollera stavningen." : "Kuntaa ei löytynyt – tarkista kirjoitusasu.") + '</div>';
         L.hidden = false; return;
       }
       L.innerHTML = items.map(function (x, j) {
-        var sub = x.r;
-        if (x.h && x.d) {
+        var sub = SV && !x.ss ? "på finska" : x.r;
+        if (x.h && x.d && !(SV && !x.ss)) {
           var m = nights(x.d);
-          if (m > 0) sub += " · " + x.h + "an " + m + " " + (m === 1 ? "yö" : "yötä");
+          if (SV && x.hs) { if (m > 0) sub = "Till " + x.hs + " " + m + " " + (m === 1 ? "natt" : "nätter"); else if (m === 0) sub = "Lovet börjar i dag!"; }
+          else if (m > 0) sub += " · " + x.h + "an " + m + " " + (m === 1 ? "yö" : "yötä");
           else if (m === 0) sub += " · " + x.h + " alkaa tänään!";
         }
+        var p1 = SV && x.sv ? x.sv : x.n, p2 = SV && x.sv ? x.n : x.sv;
         return '<a role="option" id="' + L.id + "-" + j + '" class="aco' + (j === a ? " on" : "") + '" href="' + url(x) + '">' +
-          "<b>" + hl(x.n, q) + (x.sv && x.sv !== x.n ? " <small>(" + esc(x.sv) + ")</small>" : "") + "</b><span>" + esc(sub) + "</span></a>";
+          "<b>" + hl(p1, q) + (p2 && p2 !== p1 ? " <small>(" + esc(p2) + ")</small>" : "") + "</b><span>" + esc(sub) + "</span></a>";
       }).join("");
       L.hidden = false;
       i.setAttribute("aria-expanded", "true");
@@ -97,7 +102,9 @@
       var cd = document.getElementById("cd"), txt = b.getAttribute("data-text") || document.title;
       if (cd && b.getAttribute("data-hol")) {
         var n = parseInt(cd.textContent, 10);
-        txt = b.getAttribute("data-name") + ": " + b.getAttribute("data-hol") + "an " + n + " " + (n === 1 ? "yö" : "yötä") + "!";
+        txt = document.documentElement.lang === "sv"
+          ? b.getAttribute("data-name") + ": till " + b.getAttribute("data-hol") + " " + n + " " + (n === 1 ? "natt" : "nätter") + "!"
+          : b.getAttribute("data-name") + ": " + b.getAttribute("data-hol") + "an " + n + " " + (n === 1 ? "yö" : "yötä") + "!";
       }
       var url = location.origin + location.pathname;
       if (navigator.share) {
@@ -105,7 +112,7 @@
       } else if (navigator.clipboard) {
         navigator.clipboard.writeText(txt + " " + url).then(function () {
           var l = b.querySelector("span"), o = l.textContent;
-          l.textContent = "Linkki kopioitu!";
+          l.textContent = document.documentElement.lang === "sv" ? "Länken kopierad!" : "Linkki kopioitu!";
           setTimeout(function () { l.textContent = o; }, 2200);
         });
       }

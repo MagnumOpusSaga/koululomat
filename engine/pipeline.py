@@ -32,8 +32,10 @@ def about_this_municipality(doc, mun, home) -> bool:
         return True
     names = [mun["fi"]] + ([mun["sv"]] if mun.get("sv") else [])
     stem = [n[:-1] if len(n) > 5 else n for n in names]  # taivutusmuodot (Kuopion, Oulun)
+    asc = lambda x: x.lower().replace("ä", "a").replace("ö", "o").replace("å", "a")
+    # url ilman ääkkösiä (peda.net/merijarvi, larsmo.fi) ja nimi ilman ääkkösiä
     return any(re.search(re.escape(s), doc["text"][:20000], re.I) for s in stem) or \
-        any(re.search(re.escape(s.lower()), doc["url"].lower()) for s in stem)
+        any(asc(s) in asc(doc["url"]) for s in stem)
 
 
 FORM_ESI = re.compile(r"varhaiskasvat|esiopetu|paivakoti|päiväkoti|förskol|smabarn|småbarn", re.I)

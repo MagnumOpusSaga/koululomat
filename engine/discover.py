@@ -27,7 +27,7 @@ AGGREGATOR_RX = re.compile(r"(^|[/.])(oph\.fi|pyhapaivat\.fi|calendar\.center|ko
                            r"lomakalenteri\.fi|loma-ajat\.fi|yle\.fi|hs\.fi|iltalehti\.fi|is\.fi|mtvuutiset\.fi|wikipedia\.org|facebook\.com|instagram\.com)", re.I)
 # kansalais-/työväenopistot ja harrastukset: omat lukukaudet, eivät koulujen lomat
 NONSCHOOL_RX = re.compile(r"kansalaisopisto|tyovaenopisto|työväenopisto|-opisto/|/opisto|opinto-?ohjelma|kurssiohjelma|medborgarinstitut|arbis", re.I)
-SHARE_RX = re.compile(r"facebook\.com/(share|sharer)|twitter\.com/intent|x\.com/intent|linkedin\.com/share|api\.whatsapp\.com|mailto:|/feedback/?$|/formular/?$|/anmalan", re.I)
+SHARE_RX = re.compile(r"addtoany\.com|translate\.google|translate\.goog|facebook\.com/(share|sharer)|twitter\.com/intent|x\.com/intent|linkedin\.com/share|api\.whatsapp\.com|mailto:|/feedback/?$|/formular/?$|/anmalan", re.I)
 DOMAIN_OVERRIDES = {"091": "https://www.hel.fi/fi", "092": "https://www.vantaa.fi/fi",
                     "049": "https://www.espoo.fi/fi", "853": "https://www.turku.fi",
                     "598": "https://www.pietarsaari.fi", "564": "https://www.ouka.fi", "536": "https://www.nokiankaupunki.fi"}
@@ -95,18 +95,42 @@ def _sitemap_urls(home: str, limit_maps=40) -> list:
     return urls
 
 
-def search_api(query: str, n=10) -> list:
+def search_api(query: str, n=10, lang="fi") -> list:
     """Brave Search API (ilmainen taso). Avain ympäristömuuttujasta, ei koskaan koodiin."""
     key = os.environ.get("BRAVE_API_KEY")
     if not key:
         return []
     import requests
     r = requests.get("https://api.search.brave.com/res/v1/web/search",
-                     params={"q": query, "count": n, "country": "FI", "search_lang": "fi"},
+                     params={"q": query, "count": n, "country": "FI", "search_lang": lang},
                      headers={"X-Subscription-Token": key, "Accept": "application/json"}, timeout=20)
     if r.status_code != 200:
         return []
     return [x["url"] for x in r.json().get("web", {}).get("results", [])]
+
+
+def _ascii(x):
+    return x.lower().replace("ä", "a").replace("ö", "o").replace("å", "a")
+
+
+def swedish_first(mun: dict, home: str) -> bool:
+    """Ruotsinkielinen kunta: Ahvenanmaa tai kotisivu ruotsinkielisellä nimellä (nykarleby.fi, vora.fi, malax.fi …)."""
+    host = urlparse(home or "").netloc.lower()
+    sv = _ascii(re.sub(r"[^\wåäö]", "", mun.get("sv") or ""))
+    return host.endswith(".ax") or (bool(sv) and sv != _ascii(re.sub(r"[^\wåäö]", "", mun["fi"])) and sv[:5] in host.replace("-", ""))
+
+
+def queries(mun: dict, home: str, years=("2026-2027", "2027-2028")) -> list:
+    """(kysely, kieli): ensin haku rajattuna kunnan omaan sivustoon, sitten Peda.net / yleinen haku oikealla kielellä.
+    Yleishaku ilman rajausta palautti pienille ja ruotsinkielisille kunnille vain muiden kuntien sivuja (Jomala, Vöyri)."""
+    host = urlparse(home or "").netloc.replace("www.", "")
+    if swedish_first(mun, home):
+        n = mun.get("sv") or mun["fi"]
+        return [(f"site:{host} läsår {years[0]} skolornas arbetsdagar lov", "sv") if host else (f"{n} läsår {years[0]} skolornas arbetsdagar", "sv"),
+                (f"{n} skola läsåret {years[0]} höstlov jullov sportlov", "sv")]
+    n = mun["fi"]
+    return [(f"site:{host} työ- ja loma-ajat {years[0]}", "fi") if host else (f"työ- ja loma-ajat {years[0]} {n}", "fi"),
+            (f"{n} koulujen työ- ja loma-ajat {years[0]} peda.net OR pdf", "fi")]
 
 
 def queries_fi(mun: dict, years=("2026-2027", "2027-2028")) -> list:
@@ -183,9 +207,9 @@ def discover(mun: dict, max_pages=45, log=None) -> dict:
                 break
     # 4. hakurajapinta vain, jos ryömintä ei löytänyt vahvaa ehdokasta (Brave: ~5 $/1000 hakua, 5 $ kuukausikrediitti)
     if not any(sc >= 7 for sc, _ in scored.values()):
-        for q in queries_fi(mun)[:2]:
-            for u in search_api(q):
-                add(u, 6, "haku")
+        for q, lg in queries(mun, home):
+            for u in search_api(q, lang=lg):
+                add(u, 7 if home and same_site(u, home) else 6, "haku")
         res["searched"] = bool(os.environ.get("BRAVE_API_KEY"))
     res["pages_crawled"] = len(seen)
     res["candidates"] = sorted(([u, s, w] for u, (s, w) in scored.items() if not SHARE_RX.search(u) and not AGGREGATOR_RX.search(u) and not NONSCHOOL_RX.search(u)), key=lambda x: -x[1])

@@ -276,6 +276,12 @@ def extract(text: str, want_years=None, want_variant=None, default_form="perus",
         if not r:
             continue
         a, b, raw, _ = r
+        # "Syysloma vko 42: ma 13.10. - su 19.10.2025": viikko luettiin otsikon vuodelle, mutta rivin päivä kertoo toisen
+        # lukuvuoden -> ei käytetä (Muonio 2025–26 -asiakirja)
+        if sy and not re.search(r"20\d\d", raw):
+            lsy = {(int(yy) if int(mm) >= 8 else int(yy) - 1) for _, mm, yy in re.findall(r"\b(\d{1,2})\.(\d{1,2})\.(20\d\d)\b", line) if 1 <= int(mm) <= 12}
+            if lsy and sy[0] not in lsy:
+                continue
         fixed = False
         if sy and field not in ("saturday", "free"):
             lo, hi = date(sy[0], 7, 15), date(sy[1], 6, 30)
@@ -352,6 +358,14 @@ def extract(text: str, want_years=None, want_variant=None, default_form="perus",
     for y, ns in terms.items():
         if len(ns) == 2 and 170 <= sum(ns) <= 200:
             out.setdefault(y, {}).setdefault("days_doc", sum(ns))
+    # vuoden "kirjoitusvirheen" korjaus on tarkoitettu yksittäiselle kentälle (Lumparland "Höstlov 14.10–16.10.2025").
+    # Jos useampi kenttä tarvitsisi korjauksen, asiakirja koskee toista lukuvuotta (Muonio 2025–26) -> ei käytetä.
+    for y, rec in out.items():
+        fixed = [f for f, v in rec.items() if isinstance(v, dict) and v.get("year_fixed")]
+        if len(fixed) >= 2:
+            for f in fixed:
+                del rec[f]
+    out = {y: rec for y, rec in out.items() if any(k not in ("days_doc", "_conflicts") for k in rec)}
     return {k: _derive(k, v, law=want_form == "perus") for k, v in out.items()}
 
 

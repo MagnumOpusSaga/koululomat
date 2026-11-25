@@ -18,6 +18,18 @@ YEARS = ("2026-2027", "2027-2028")
 FIELDS = ("start", "syys", "joulu", "talvi", "end")
 
 
+def _extra(f):
+    """Lisätiedot artikkeleille ja kuntasivulle: lukukausien rajat, lauantaikoulupäivät, vapaapäivät, pääsiäinen."""
+    def d(x, k):
+        return x.get(k) if isinstance(x, dict) else None
+    e = {"term1_end": d(f.get("term1"), "end") or d(f.get("term1_end"), "start"),
+         "term2_start": d(f.get("term2"), "start") or d(f.get("term2_start"), "start"),
+         "saturdays": sorted({x["start"] for x in (f.get("saturday") or []) if isinstance(x, dict) and x.get("start")}),
+         "free": sorted({x["start"] for x in (f.get("free") or []) if isinstance(x, dict) and x.get("start")}),
+         "paasiainen": [d(f.get("paasiainen"), "start"), d(f.get("paasiainen"), "end")] if f.get("paasiainen") else None}
+    return {k: v for k, v in e.items() if v}
+
+
 def main(dirs):
     muns = json.loads((ROOT / "fi_municipalities.json").read_text())
     res = {}
@@ -53,6 +65,7 @@ def main(dirs):
                     "source": v["primary"], "updated": now,
                     "fields": {k: {"start": f[k]["start"], "end": f[k]["end"], "quote": f[k].get("quote", "")[:160],
                                    "sources": f[k].get("sources", [])} for k in FIELDS if k in f},
+                    "extra": _extra(f),
                 }
         out.append(rec)
     # arviot: maakunnan yleisin arvo varmistetuista

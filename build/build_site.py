@@ -69,7 +69,7 @@ T = {"fi": {"wd": WD, "hol": {k: v["name"] for k, v in HOL.items()}, "week": "vi
             "adult": "Aikuisille: tarkat päivät", "rows": ["Koulu alkaa", "Syysloma", "Joululoma", "Talviloma (hiihtoloma)", "Koulu päättyy"],
             "perus": "Perusopetus", "tabs": ["Peruskoulu", "Esikoulu", "Lukio"], "tabl": "Koulumuoto", "full": ["Esiopetus", "Lukio"],
             "note": "Lomapäivät ovat arkipäiviä, viikonloput tulevat lisäksi. Yksittäisten koulujen päivät voivat poiketa.",
-            "src": "Lähteet", "upd": "Päivitetty", "calc": "koulupäiviä laskettu", "law": "laki",
+            "src": "Lähteet", "upd": "Päivitetty", "calc": "koulupäiviä laskettu", "docd": "koulupäiviä kunnan ilmoituksen mukaan", "law": "laki",
             "noyear": "arvio – kunnan päätöstä ei vielä löytynyt, tarkista koululta",
             "frows": ["Lukukausi alkaa", "Syysloma", "Syyslukukausi päättyy", "Joululoma", "Kevätlukukausi alkaa", "Talviloma (hiihtoloma)", "Lukukausi päättyy"],
             "fnone": lambda full, F: (f"Kunnan lähteestä ei löytynyt erikseen ilmoitettuja päiviä ({full.lower()}). "
@@ -93,7 +93,7 @@ T = {"fi": {"wd": WD, "hol": {k: v["name"] for k, v in HOL.items()}, "week": "vi
             "adult": "Exakta datum för vuxna", "rows": ["Skolan börjar", "Höstlov", "Jullov", "Sportlov (vinterlov)", "Skolan slutar"],
             "perus": "Grundskola", "tabs": ["Grundskola", "Förskola", "Gymnasium"], "tabl": "Skolform", "full": ["Förskoleundervisning", "Gymnasium"],
             "note": "Lovdagarna är vardagar, veckosluten kommer till. Enskilda skolor kan ha avvikande dagar.",
-            "src": "Källor", "upd": "Uppdaterad", "calc": "skoldagar beräknade", "law": "lag",
+            "src": "Källor", "upd": "Uppdaterad", "calc": "skoldagar beräknade", "docd": "skoldagar enligt kommunen", "law": "lag",
             "noyear": "uppskattning – kommunens beslut har inte hittats ännu, kontrollera med skolan",
             "frows": ["Terminen börjar", "Höstlov", "Höstterminen slutar", "Jullov", "Vårterminen börjar", "Sportlov (vinterlov)", "Terminen slutar"],
             "fnone": lambda full, F: ("Kommunens källa anger inga separata datum för " + ("förskoleundervisningen. Förskolan följer ofta grundskolans lov, men start och slut kan avvika. Kontrollera med daghemmet eller skolan."
@@ -454,7 +454,10 @@ def adult_table(rec, lang="fi"):
         yy = y.replace("-", "–")
         if v.get("source"):
             s = re.sub(r"^https?://(www\.)?", "", v["source"])[:70]
-            extra = (f" · {L['calc']} {v['days_calc']}" + (f" ({L['law']} {v['days_expected']})" if v.get("days_expected") else "")) if v.get("days_calc") else ""
+            if v.get("days_doc") and v.get("days_doc") == v.get("days_expected") and v.get("days_calc") != v.get("days_doc"):
+                extra = f" · {L['docd']} {v['days_doc']} ({L['law']} {v['days_expected']})"
+            else:
+                extra = (f" · {L['calc']} {v['days_calc']}" + (f" ({L['law']} {v['days_expected']})" if v.get("days_expected") else "")) if v.get("days_calc") else ""
             srcs.append(f'{yy}: <a href="{html.escape(v["source"])}" rel="nofollow">{html.escape(s)}</a>{extra}')
         else:
             srcs.append(f"{yy}: {L['noyear']}")

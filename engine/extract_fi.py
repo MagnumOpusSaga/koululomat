@@ -4,6 +4,7 @@ Palauttaa jokaiselle lukuvuodelle kentät + lainauksen jokaiselle luetulle päiv
 Tekoälylukija (ai_reader.py) käytetään, kun tämä ei löydä tai tarkistukset hylkäävät.
 """
 import re
+from collections import defaultdict
 from datetime import date
 
 from .cal import clip_to_weekdays, iso_week_range
@@ -20,17 +21,18 @@ FIELDS = {
     "term2_start": r"vårtermin(en)?\s+inleds|kevät(luku)?kausi\s+alkaa|vårtermin(en)?\s+(börjar|startar)",
     "start": r"syy\w{0,2}lukukausi\s+alkaa|koulun\s+alkaminen|hösttermin(en)?\s+inleds|(?<!esi)opetus\s+alkaa|syys(luku)?kausi\s+alkaa|undervisningen\s+börjar|hösttermin(en)?\s+(börjar|startar)|koulu(t|työ|työt)?\s+alka(a|vat)|lukuvuosi\s+alkaa|työt\s+alkavat|skol(an|arbetet)\s+börjar|läsåret\s+börjar|ensimmäinen\s+koulupäivä|första\s+skoldag\w*",
     "end": r"lukuvuoden\s+viimeinen\s+(työ|koulu)päivä|(?<=\d)\s+ja\s+päättyy|(?<=\d)\s+ja\s+päättyvät|kevät(luku)?kausi\s+päättyy|läsårets\s+sista\s+(arbets|skol)dag|vårtermin(en)?\s+(slutar|avslutas)|lukuvuosi\s+päättyy|koulu(t|työ|työt)?\s+päätty(y|vät)|lukuvuoden\s+päät\w*|läsåret\s+(slutar|avslutas)|skolavslutning\w*|viimeinen\s+koulupäivä|sista\s+skoldag\w*|kevätjuhla\w*",
-    "saturday": r"lauantai(koulu|työ)?päiv\w*|työlauantai\w*|koulupäivä(nä)?\s+lauantai\w*|lauantaina\s+koulupäivä|lördag(en)?\s+(är\s+)?(en\s+)?skoldag|skoldag\s+lördag\w*|arbetslördag\w*",
+    "saturday": r"lauantai(koulu|työ)?päiv\w*|(?:koulu|työ)päivä\s+(?:la|lauantai\w*)\b|työlauantai\w*|koulupäivä(nä)?\s+lauantai\w*|lauantaina\s+koulupäivä|lördag(en)?\s+(är\s+)?(en\s+)?skoldag|skoldag\s+lördag\w*|arbetslördag\w*",
     "kesa": r"kesäloma\w*|sommarlov\w*",
     "generic_start": r"(?:^|(?<=\n))[ \t]*alkaa\b",
     "generic_end": r"(?<=\d)\s+och\s+avslutas|(?<![a-zåäö])avslutning(?!\w)|(?:^|(?<=\n))[ \t]*päättyy\b|(?<![a-zäö])lukukausi\s+päättyy",
-    "free": r"helatorstain\s+(jälkeinen|jälkeisenä|seuraava)\s+perjantai\w*|helavapaa\w*|vapaapäiv\w*|ylimääräi\w*\s+vapaa\w*|lomapäiv\w*|ledig\s+dag|lovdag\w*",
+    "free": r"helatorstain\s+(?:to\s+)?[\d.\s]*(jälkeinen|jälkeisenä|seuraava)\s+perjantai\w*|muu\s+vapaa\w*|perjantaivapaa\w*|\bvapaa(?:ta)?\b(?!-)|helavapaa\w*|vapaapäiv\w*|ylimääräi\w*\s+vapaa\w*|lomapäiv\w*|ledig\s+dag|lovdag\w*",
 }
 KW = {k: re.compile(v, re.I) for k, v in FIELDS.items()}
 ANY_KW = re.compile("|".join(f"(?:{v})" for v in FIELDS.values()), re.I)
 
 TERM_YEAR = re.compile(r"(syyslukukau\w*|syyskau\w*|hösttermin\w*|kevätlukukau\w*|kevätkau\w*|vårtermin\w*)\s+(20[2-3]\d)(?!\s*[–—/‐-]\s*\d)", re.I)
 YEARPAIR = re.compile(r"(?<!\d)(20[2-3]\d)\s*[–—/‐-]\s*(20[2-3]\d|[2-3]\d)(?!\d)")
+TERM_DAYS = re.compile(r"\b(\d{2,3})\s*(?:koulu|työ)päivää|(?:koulu|työ)päiviä\s*(\d{2,3})\b|\b(\d{2,3})\s*(?:skol|arbets)dagar", re.I)
 DAYS_RE = re.compile(r"(?:(\d{3})\s*(?:koulu|työ)päivä|(?:koulu|työ)päiviä\s*(?:on\s*)?(?:yhteensä\s*)?(\d{3})|(\d{3})\s*skoldagar|skoldagar\w*\s*:?\s*(\d{3}))", re.I)
 
 D = r"(\d{1,2})\.\s?(\d{1,2})(?:\.|(?=\s*[–—‐‑−-])|(?=[ \t]*(?:\(|,|;|$)))(?:\s?(20\d\d|\d\d)(?!\d))?"
@@ -259,6 +261,14 @@ def extract(text: str, want_years=None, want_variant=None, default_form="perus",
                 if want_form == "perus" and t.rfind("\n", 0, ap) > s and OTHER_FORM.search(dl) and not PERUS_RX.search(dl):
                     r = None
                     continue
+        if not r and field in ("free", "saturday"):  # "to 6.5.2027 ja pe 7.5.2027 vapaa" -> viimeinen päivä ennen sanaa
+            before = t[max(t.rfind("\n", 0, s) + 1, s - 60):s]
+            pos, last = 0, None
+            while (x := parse_dates(before[pos:], sy)):
+                last = x
+                pos += x[3] + max(1, len(x[2]))
+            if last:
+                r = last
         if not r:  # taulukossa päivä voi olla ennen avainsanaa samalla rivillä
             line_start = t.rfind("\n", 0, s) + 1
             before = t[max(line_start, s - 60):s]
@@ -328,6 +338,20 @@ def extract(text: str, want_years=None, want_variant=None, default_form="perus",
                     sy = pair
             if sy:
                 out.setdefault(f"{sy[0]}-{sy[1]}", {}).setdefault("days_doc", n)
+    # lukukausien ilmoitetut työpäivät ("johon sisältyy 89 työpäivää" + "100 työpäivää", "(työpäiviä 90)") -> summa
+    terms = defaultdict(list)
+    for m in TERM_DAYS.finditer(t):
+        n = int(next(g for g in m.groups() if g))
+        if 70 <= n <= 120:
+            sy = None
+            for p, pair in headers:
+                if p <= m.start():
+                    sy = pair
+            if sy:
+                terms[f"{sy[0]}-{sy[1]}"].append(n)
+    for y, ns in terms.items():
+        if len(ns) == 2 and 170 <= sum(ns) <= 200:
+            out.setdefault(y, {}).setdefault("days_doc", sum(ns))
     return {k: _derive(k, v, law=want_form == "perus") for k, v in out.items()}
 
 

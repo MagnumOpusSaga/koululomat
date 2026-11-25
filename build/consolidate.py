@@ -56,7 +56,7 @@ def _accept(v, m, y, review, now, strict=False):
     if strict and not _sane(f):
         return None
     return {"status": v["status"], "confidence": v["confidence"],
-            "days_calc": v["checks"]["calc_days"], "days_expected": v["checks"]["expected_days"],
+            "days_calc": v["checks"]["calc_days"], "days_expected": v["checks"]["expected_days"], "days_doc": v["checks"].get("doc_days"),
             "source": v["primary"], "updated": now,
             "fields": {k: {"start": f[k]["start"], "end": f[k]["end"], "quote": f[k].get("quote", "")[:160],
                            "sources": f[k].get("sources", [])} for k in FIELDS if k in f},

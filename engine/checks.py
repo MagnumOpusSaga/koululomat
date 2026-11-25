@@ -114,7 +114,9 @@ def run_checks(country: str, year: str, r: dict) -> dict:
     elif country == "se":
         res["days_ok"] = calc >= exp
     else:
-        res["days_ok"] = calc == exp or (doc is not None and calc == doc)
+        # kunnan oma asiakirja ilmoittaa lain mukaisen määrän ja oma laskenta eroaa ≤ 2 päivää (yleensä sanallisesti
+        # ilmoitettu vapaapäivä tai lauantaityöpäivä, jota ei voi lukea päivämääränä) -> kunnan ilmoitus ratkaisee
+        res["days_ok"] = calc == exp or (doc is not None and calc == doc) or (doc == exp and abs(calc - exp) <= 2)
     res["plausibility"] = plausibility(country, year, r)
     return res
 

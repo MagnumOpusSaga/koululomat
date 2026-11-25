@@ -122,6 +122,11 @@ a.card{text-decoration:none;color:#2A1B0F}a.card:hover{transform:translateY(-2px
 .wkb{width:62px;height:62px;border-radius:18px;background:var(--bg);color:var(--c);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;line-height:1}
 .wkb small{font-size:12px;font-weight:800}.wkb b{font-size:24px;font-weight:900}
 .az{scroll-margin-top:16px}
+.tabs{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap}.tabs button{font:inherit;font-weight:800;font-size:15px;padding:9px 16px;border-radius:999px;border:2px solid #E8D9C4;background:#fff;color:#2A1B0F;cursor:pointer}
+.tabs button[aria-selected=true]{background:#2A1B0F;border-color:#2A1B0F;color:#fff}.tabs button:focus-visible{outline:3px solid #E8741E;outline-offset:2px}
+@media print{@page{margin:14mm}body{background:#fff;font-size:12pt}.pv,header.top,footer.bot,.btns,details,.share,.bar,form,#cd+.unit+button{display:none!important}
+.hero,.grid{display:none!important}.layout{display:block}.box{padding:0;box-shadow:none;border:0}table{font-size:12pt}
+a{color:#000;text-decoration:none}h1{font-size:22pt;margin:0 0 8px}main::after{content:"koululomat.fi – tiedot kunnan omasta lähteestä";display:block;margin-top:12px;font-size:10pt}}
 .cmpr{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #F2E6D3;font-size:16px}.cmpr span{font-weight:700;color:#5F4B3A}.cmpr b{text-align:right}
 .sr{position:absolute;left:-9999px}
 h1{font-size:30px;line-height:1.15;font-weight:900;margin:8px 0 16px}
@@ -334,9 +339,51 @@ def adult_table(rec):
         else:
             srcs.append(f"{yy}: arvio – kunnan päätöstä ei vielä löytynyt, tarkista koululta")
     upd = d(max(v["updated"] for _, v in years))
-    return (f'<section class="box"><h2>Aikuisille: tarkat päivät</h2><div style="overflow-x:auto"><table><thead><tr><th>Perusopetus</th>{head}</tr></thead>'
-            f'<tbody>{body}</tbody></table></div><p class="src">Lomapäivät ovat arkipäiviä, viikonloput tulevat lisäksi. Esiopetuksen, lukion ja yksittäisten koulujen päivät voivat poiketa.<br>'
-            f'Lähteet – {" · ".join(srcs)}. Päivitetty {upd.day}.{upd.month}.{upd.year}.</p></section>')
+    perus = (f'<div style="overflow-x:auto"><table><thead><tr><th>Perusopetus</th>{head}</tr></thead>'
+             f'<tbody>{body}</tbody></table></div><p class="src">Lomapäivät ovat arkipäiviä, viikonloput tulevat lisäksi. Yksittäisten koulujen päivät voivat poiketa.<br>'
+             f'Lähteet – {" · ".join(srcs)}. Päivitetty {upd.day}.{upd.month}.{upd.year}.</p>')
+    tabs = [("perus", "Peruskoulu", perus)]
+    for F, nm, full in (("esi", "Esikoulu", "Esiopetus"), ("lukio", "Lukio", "Lukio")):
+        tabs.append((F, nm, form_table(rec, F, full, upd)))
+    btns = "".join(f'<button type="button" role="tab" id="t-{F}" aria-controls="p-{F}" aria-selected="{"true" if i == 0 else "false"}"'
+                   f'{"" if i == 0 else " tabindex=-1"}>{nm}</button>' for i, (F, nm, _) in enumerate(tabs))
+    panels = "".join(f'<div role="tabpanel" id="p-{F}" aria-labelledby="t-{F}" class="tp">{c}</div>' for F, _, c in tabs)
+    return (f'<section class="box"><h2>Aikuisille: tarkat päivät</h2><div class="tabs" role="tablist" aria-label="Koulumuoto" hidden>{btns}</div>'
+            f'{panels}</section>')
+
+
+FORM_ROWS = [("Lukukausi alkaa", "start"), ("Syysloma", "syys"), ("Syyslukukausi päättyy", "term1_end"), ("Joululoma", "joulu"),
+             ("Kevätlukukausi alkaa", "term2_start"), ("Talviloma (hiihtoloma)", "talvi"), ("Lukukausi päättyy", "end")]
+
+
+def form_table(rec, F, full, upd):
+    fy = (rec.get("forms") or {}).get(F) or {}
+    years = sorted(fy.items())
+    if not years:
+        extra = ("Esiopetus noudattaa usein peruskoulun lomia, mutta alku- ja loppupäivä voivat poiketa." if F == "esi" else
+                 "Lukion lomat ovat usein samat kuin peruskoulussa, mutta lukukauden alku ja loppu voivat poiketa.")
+        return (f'<p class="src" style="font-size:15px">Kunnan lähteestä ei löytynyt erikseen ilmoitettuja päiviä ({full.lower()}). {extra} '
+                f'Tarkista {"päiväkodista tai koululta" if F == "esi" else "lukiolta"}.</p>')
+    head = "".join(f"<th>{y.replace('-', '–')}<br>{badge('yksi_lähde')}</th>" for y, _ in years)
+    body = ""
+    for label, k in FORM_ROWS:
+        if not any(k in r for _, r in years):
+            continue
+        cells = ""
+        for _, r in years:
+            x = r.get(k)
+            if not x:
+                cells += "<td>–</td>"
+            elif k in ("syys", "joulu", "talvi"):
+                cells += f"<td>{fmt(x['start'], x['end'])}" + (f" <small>(vk {week(x['start'])})</small>" if k in ("syys", "talvi") else "") + "</td>"
+            else:
+                cells += f"<td>{fmt(x['start'])}</td>"
+        body += f"<tr><th scope='row'>{label}</th>{cells}</tr>"
+    srcs = sorted({u for _, r in years for x in r.values() for u in x.get("sources", [])})
+    sl = " · ".join(f'<a href="{html.escape(u)}" rel="nofollow">{html.escape(re.sub(r"^https?://(www[.])?", "", u)[:70])}</a>' for u in srcs[:3])
+    return (f'<div style="overflow-x:auto"><table><thead><tr><th>{full}</th>{head}</tr></thead><tbody>{body}</tbody></table></div>'
+            f'<p class="src">Luettu kunnan omasta asiakirjasta; ei vielä varmistettu toisesta lähteestä. '
+            f'Puuttuvat rivit eivät ole lähteessä erikseen.<br>Lähteet – {sl}. Päivitetty {upd.day}.{upd.month}.{upd.year}.</p>')
 
 
 def ics(rec):
@@ -401,7 +448,10 @@ def build(data_path, out_dir):
         cmp_url = HPAGE[nk][0] if nk else "/fi/hiihtoloma-2027/"
         body = (f'<h1>{rec["name"]}{sv}: koulujen lomat</h1>{top}'
                 f'<div class="btns"><a class="btn" href="/fi/{s}/lomat.ics">Lisää lomat kalenteriin</a>'
-                f'<a class="btn alt" href="/vertaa/?a={s}">Vertaa toiseen kuntaan</a></div>'
+                f'<a class="btn alt" href="/vertaa/?a={s}">Vertaa toiseen kuntaan</a>'
+                f'<button class="btn alt" id="kuva" type="button" hidden data-s="{s}" data-y="{y1}"><span>Tallenna kuvana</span></button>'
+                f'<button class="btn alt" id="tulosta" type="button" hidden><span>Tulosta</span></button></div>'
+                f'<script src="/kuva.js" defer></script>'
                 f'{adult_table(rec)}{REPORT_FORM.format(id=rec["id"])}{COUNTDOWN_JS}')
         tal = (rec["years"].get(y1) or {}).get("fields", {}).get("talvi")
         desc = (f"{rec['name']}: syysloma, joululoma ja hiihtoloma" + (f" (vk {week(tal['start'])})" if tal else "")

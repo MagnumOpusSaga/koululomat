@@ -67,6 +67,11 @@ def main(dirs):
                                    "sources": f[k].get("sources", [])} for k in FIELDS if k in f},
                     "extra": _extra(f),
                 }
+        forms = (r or {}).get("forms") or {}
+        if forms:
+            rec["forms"] = {F: {y: {k: {kk: x[kk] for kk in ("start", "end", "quote", "sources", "conflict") if kk in x}
+                                    for k, x in fy.items()} for y, fy in ys.items() if y in YEARS}
+                            for F, ys in forms.items()}
         out.append(rec)
     # arviot: maakunnan yleisin arvo varmistetuista
     for y in YEARS:

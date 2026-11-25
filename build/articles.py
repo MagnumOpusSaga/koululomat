@@ -200,4 +200,53 @@ def build_articles(data, today, write, h):
     path = "/artikkelit/joululoma-2026/"
     write(path, page(f"{title} | Koululomat", desc, body, path, _schema(title, desc, path, BASE, today, faq), theme="joulu", top_search=False))
     out.append({"path": path, "title": "Joululoma 2026: milloin koulujen joululoma alkaa?", "sub": f"Alkaa {sd[0].day}.–{sd[-1].day}.{sd[-1].month}. – alueittain" if sd else "Alueittain", "k": "joulu"})
+    # ---------------- Viimeinen koulupäivä ennen joulua 2026 ----------------
+    last = defaultdict(list)
+    for r in ok:
+        v = r["years"][Y1]
+        t1 = (v.get("extra") or {}).get("term1_end")
+        j = v["fields"].get("joulu")
+        if t1:
+            last[date.fromisoformat(t1)].append(r)
+        elif j:
+            js = date.fromisoformat(j["start"])
+            if js.weekday() == 0:
+                last["pe/la"].append(r)  # loma alkaa maanantaina: viimeinen päivä pe tai la (joulujuhla)
+            else:
+                last[js - timedelta(1)].append(r)
+    known = sorted(k for k in last if k != "pe/la")
+    if known:
+        top = max(known, key=lambda k: len(last[k]))
+        sat = [k for k in known if k.weekday() == 5]
+        short = (f"Koulun viimeinen päivä ennen joulua on kunnasta riippuen {_join([f'{FI_WD[k.weekday()]} {k.day}.{k.month}.' for k in known])}2026. "
+                 f"Yleisin on {FI_WD[top.weekday()]} {top.day}.{top.month}. ({len(last[top])} kuntaa).")
+        if sat:
+            short += f" {sum(len(last[k]) for k in sat)} kunnassa joulujuhla pidetään lauantaina, ja se on koulupäivä."
+        rows = "".join(f'<a class="row" href="/fi/joululoma/"><div class="chip"><small>{["ma", "ti", "ke", "to", "pe", "la", "su"][k.weekday()]}</small><b style="font-size:16px">{k.day}.{k.month}.</b></div>'
+                       f'<div><b class="t">{"Joulujuhla lauantaina " + f"{k.day}.{k.month}." if k.weekday() == 5 else f"Viimeinen koulupäivä {FI_WD[k.weekday()]} {k.day}.{k.month}."}</b>'
+                       f'<span>{len(last[k])} kuntaa · esim. {_examples(last[k])}</span></div></a>' for k in known)
+        if last.get("pe/la"):
+            rows += (f'<div class="row"><div class="chip"><small>pe/la</small><b style="font-size:16px">18./19.</b></div><div><b class="t">Perjantai 18.12. tai lauantai 19.12.</b>'
+                     f'<span>{len(last["pe/la"])} kuntaa – joululoma alkaa ma 21.12., tarkista oman kunnan sivulta</span></div></div>')
+        faq = [("Onko joulujuhla koulupäivä?", "Kyllä, jos joulujuhla on lukuvuoden työaikoihin merkitty koulupäivä. Lauantain joulujuhla korvaa jonkin toisen koulupäivän, joten lukuvuoden koulupäivien määrä pysyy samana."),
+               ("Miksi joulujuhla on lauantaina?", "Lauantaina myös työssä käyvät vanhemmat ja isovanhemmat pääsevät mukaan. Lauantai on silloin koulupäivä, ja vapaapäivä pidetään toisena päivänä."),
+               ("Milloin koulu alkaa joulun jälkeen?", "Useimmissa kunnissa torstaina 7.1.2027, loppiaisen jälkeen. Katso oman kuntasi päivät haulla."),
+               ("Onko esikoulun viimeinen päivä sama?", "Ei aina. Esiopetus päättyy usein perjantaina, vaikka koulu jatkuu lauantain joulujuhlaan.")]
+        body = (f'<article class="art" style="--c2:#0E5A2B"><div class="kick">Artikkeli · Joululoma</div>'
+                f'<h1>Milloin koulu loppuu ennen joulua 2026?</h1>{meta}'
+                f'<section class="ans"><div class="lbl">{icon("joulu", 20, "currentColor")} Lyhyt vastaus</div><p class="short">{short}</p>{rows}</section>'
+                f'<h2 style="font-size:19px;margin:22px 0 8px">Milloin koulu loppuu sinun kunnassasi?</h2>{search_form("q2", "Kirjoita kuntasi", big=True)}'
+                f'<h2>Mikä on viimeinen koulupäivä ennen joululomaa?</h2>'
+                f'<p>Syyslukukausi päättyy joulujuhlaan. Kunta päättää päivän itse: osa pitää joulujuhlan lauantaina 19.12., osa koulun viimeisenä arkipäivänä ennen lomaa. '
+                f'Joululoma alkaa seuraavana arkipäivänä.</p>'
+                f'<h2>Usein kysyttyä</h2>{_faq(faq)}'
+                f'<div class="btns"><a class="btn" href="/artikkelit/joululoma-2026/">Joululoma 2026 kunnittain</a></div>'
+                f'<p class="src">Lähteet: {n_src} kunnan omat päätökset koulujen työ- ja loma-ajoista (perusopetus), tarkistettu {upd}. '
+                f'Viimeinen koulupäivä on luettu syyslukukauden päättymispäivästä; jos sitä ei ole ilmoitettu, se on päätelty joululoman alusta. '
+                f'<a href="/tietoa/">Miten tiedot kerätään?</a></p></article>')
+        title = "Milloin koulu loppuu ennen joulua 2026? Joulujuhla ja viimeinen koulupäivä kunnittain"
+        desc = f"Koulun viimeinen päivä ennen joulua 2026 on kunnasta riippuen {_join([f'{k.day}.{k.month}.' for k in known])} Katso oman kuntasi joulujuhlan päivä."
+        path = "/artikkelit/koulu-loppuu-ennen-joulua-2026/"
+        write(path, page(f"{title} | Koululomat", desc, body, path, _schema(title, desc, path, BASE, today, faq), theme="joulu", top_search=False))
+        out.insert(0, {"path": path, "title": "Milloin koulu loppuu ennen joulua 2026?", "sub": "Joulujuhla ja viimeinen koulupäivä kunnittain", "k": "joulu"})
     return out

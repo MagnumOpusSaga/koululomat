@@ -70,6 +70,7 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
     cands = [c[0] for c in disc["candidates"]] + list(extra_urls)
     queue = list(dict.fromkeys(list(extra_urls) + cands))[:max_docs]
     obsv = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))  # variant -> year -> field -> [...]
+    fobs = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))  # variant -> form -> year -> field -> [...]
     sources = []
     flags_by_url = {}
     read_urls = set()
@@ -132,6 +133,12 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
                            "error": (ai or {}).get("error"), "kunta_oikein": (ai or {}).get("kunta_oikein"),
                            "seen": {y: [k for k in ("koulumuoto", "syysloma", "joululoma", "talviloma") if isinstance(v, dict) and v.get(k)]
                                     + ([str(v.get("koulumuoto"))] if isinstance(v, dict) else []) for y, v in lv.items()}})
+        # esiopetus ja lukio samasta dokumentista (vain säännöt; näytetään kuntasivun välilehdillä)
+        for F in ("esi", "lukio"):
+            for y, r in extract(doc["text"], want_years=set(years), default_form=form, want_form=F).items():
+                for f, v in r.items():
+                    if f in MAIN_FIELDS + ("term1_end", "term2_start") and isinstance(v, dict) and not v.get("derived"):
+                        fobs[variant][F][y][f].append(((v["start"], v["end"]), doc["url"], v["quote"]))
         src = {"url": doc["url"], "kind": kind, "format": doc["format"], "flags": doc["flags"],
                "hash": h[:16], "change": change, "variant": variant, "reader": reader, "years": sorted(res.keys())}
         sources.append(src)
@@ -157,6 +164,7 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
     out["variant"] = primary
     out["years"] = merge_years(obsv.get(primary, {}), years, country, flags_by_url)
     out["variants"] = {v: merge_years(o, years, country, flags_by_url) for v, o in obsv.items() if v != primary}
+    out["forms"] = merge_forms(fobs.get(primary, {}))
     return out
 
 
@@ -181,6 +189,31 @@ def _doc_records(obs_y):
             elif f not in recs[u]:
                 recs[u][f] = {"start": v[0], "end": v[1], "quote": q, "derived": derived}
     return recs
+
+
+def merge_forms(fo):
+    """Esiopetus/lukio: kentän yleisin arvo dokumenteista, lähteet mukaan. -> {form: {year: {field: {...}}}}"""
+    out = {}
+    for F, ys in fo.items():
+        for y, fields in ys.items():
+            rec = {}
+            for f, lst in fields.items():
+                ok = [x for x in lst if not (f in ("syys", "talvi") and (date.fromisoformat(x[0][1]) - date.fromisoformat(x[0][0])).days < 2)
+                      and not (f == "joulu" and (date.fromisoformat(x[0][1]) - date.fromisoformat(x[0][0])).days < 5)]
+                c = Counter(x[0] for x in ok)
+                if not c:
+                    continue
+                top = c.most_common(2)
+                if len(top) > 1 and top[0][1] == top[1][1]:
+                    continue  # tasapeli: ei näytetä
+                (a, b), n = top[0]
+                lst = ok
+                srcs = sorted({x[1] for x in lst if x[0] == (a, b)})
+                rec[f] = {"start": a, "end": b, "quote": next(x[2] for x in lst if x[0] == (a, b)), "sources": srcs,
+                          "conflict": len(c) > 1}
+            if sum(1 for f in MAIN_FIELDS if f in rec) >= 2:
+                out.setdefault(F, {})[y] = rec
+    return out
 
 
 def merge_years(obs, years, country, flags_by_url):

@@ -193,7 +193,10 @@ def _section_at(sections, p):
 DATE_FIRST = re.compile(r"^\s*\d{1,2}\.\s*(\d{1,2}\.)?\s*(\d{2,4})?\s*[–-]?\s*\d{0,2}")
 
 
-def extract(text: str, want_years=None, want_variant=None, default_form="perus") -> dict:
+FORM_LINE = {"esi": re.compile(r"esiopetu|esikoul|förskol", re.I), "lukio": re.compile(r"lukio|gymnasi", re.I)}
+
+
+def extract(text: str, want_years=None, want_variant=None, default_form="perus", want_form="perus") -> dict:
     """-> {'2026-2027': {field: {'start','end','quote'}}, ...}"""
     t = _norm(text)
     headers = [(m.start(), (int(m.group(1)), _year(m.group(2), None)))
@@ -215,12 +218,19 @@ def extract(text: str, want_years=None, want_variant=None, default_form="perus")
     out: dict = {}
     for i, (s, e, field) in enumerate(kws):
         form, variant = _section_at(sections, s)
-        if form != "perus" or (want_variant is not None and variant not in (want_variant, "")):
+        if want_variant is not None and variant not in (want_variant, ""):
             continue
         ls, le = t.rfind("\n", 0, s) + 1, t.find("\n", e)
         line = t[ls:le if le > 0 else len(t)]
-        if OTHER_FORM.search(line) and not PERUS_RX.search(line):
-            continue  # rivi koskee esiopetusta/lukiota ("esiopetuksen syyslukukausi päättyy …")
+        if want_form == "perus":
+            if form != "perus":
+                continue
+            if OTHER_FORM.search(line) and not PERUS_RX.search(line):
+                continue  # rivi koskee esiopetusta/lukiota ("esiopetuksen syyslukukausi päättyy …")
+        else:
+            # esiopetus/lukio: oma osio tai rivi, joka nimeää koulumuodon ("Esiopetus alkaa 12.8.2026")
+            if not (form == want_form or FORM_LINE[want_form].search(line)):
+                continue
         sy = None
         for p, pair in headers:
             if p <= s:
@@ -246,7 +256,7 @@ def extract(text: str, want_years=None, want_variant=None, default_form="perus")
             if r:  # päivä löytyi myöhemmältä riviltä, joka koskee toista koulumuotoa ("Esiopetus alkaa 13.8.") -> ohita
                 ap = e + r[3]
                 dl = t[t.rfind("\n", 0, ap) + 1: (t.find("\n", ap) if t.find("\n", ap) >= 0 else len(t))]
-                if t.rfind("\n", 0, ap) > s and OTHER_FORM.search(dl) and not PERUS_RX.search(dl):
+                if want_form == "perus" and t.rfind("\n", 0, ap) > s and OTHER_FORM.search(dl) and not PERUS_RX.search(dl):
                     r = None
                     continue
         if not r:  # taulukossa päivä voi olla ennen avainsanaa samalla rivillä
@@ -318,10 +328,10 @@ def extract(text: str, want_years=None, want_variant=None, default_form="perus")
                     sy = pair
             if sy:
                 out.setdefault(f"{sy[0]}-{sy[1]}", {}).setdefault("days_doc", n)
-    return {k: _derive(k, v) for k, v in out.items()}
+    return {k: _derive(k, v, law=want_form == "perus") for k, v in out.items()}
 
 
-def _derive(year: str, r: dict, country: str = "fi") -> dict:
+def _derive(year: str, r: dict, country: str = "fi", law: bool = True) -> dict:
     """Lukukaudet <-> alku/loppu, joululoma lukukausien välistä, lomat arkipäiviin.
     FI: jos loppua ei ilmoiteta, se on laissa: viikon 22 viimeinen arkipäivä (la) – perusopetusasetus 7 §."""
     if "term1_end" in r and "term1" not in r and "start" in r:
@@ -337,7 +347,7 @@ def _derive(year: str, r: dict, country: str = "fi") -> dict:
     if "joulu" in r and t1e and r["joulu"]["start"] <= t1e:
         from datetime import timedelta
         r["joulu"]["start"] = (date.fromisoformat(t1e) + timedelta(1)).isoformat()
-    if "end" not in r and country == "fi" and any(k in r for k in ("syys", "talvi", "start")):
+    if law and "end" not in r and country == "fi" and any(k in r for k in ("syys", "talvi", "start")):
         y2 = int(year[5:])
         sat = date.fromisocalendar(y2, 22, 6)
         r["end"] = {"start": sat.isoformat(), "end": sat.isoformat(), "quote": "laki: viikon 22 lauantai (PoA 7 §)", "derived": True}

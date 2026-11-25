@@ -13,7 +13,7 @@ from pathlib import Path
 
 MODEL_FAST = os.environ.get("KOULULOMAT_MODEL_FAST", "claude-haiku-5-5")
 MODEL_HARD = os.environ.get("KOULULOMAT_MODEL_HARD", "claude-sonnet-5-5")
-PROMPT_VERSION = "kl-3"
+PROMPT_VERSION = "kl-4"
 
 SYSTEM = """Luet kunnan koulujen työ- ja loma-ajat dokumentista. Palauta VAIN JSON:
 {"kunta_oikein": true|false, "dokumentti_kunta": "...", "tila": "päätetty"|"ehdotus",
@@ -23,7 +23,9 @@ SYSTEM = """Luet kunnan koulujen työ- ja loma-ajat dokumentista. Palauta VAIN J
    "talviloma": [...], "paasiaisloma": [...], "vapaapaivat": ["YYYY-MM-DD"], "lauantaikoulupaivat": ["YYYY-MM-DD"],
    "koulupaivia_ilmoitettu": 190, "lainaukset": {"syysloma": "enintään 8 sanaa tekstistä", ...}}}}
 Säännöt: älä arvaa. Jos päivää ei lue dokumentissa, jätä kenttä pois. Tarkista, että dokumentti koskee
-kuntaa {kunta} eikä toista kuntaa tai yksittäistä koulua. Jos dokumentissa lukee ehdotus/luonnos/förslag/
+kuntaa {kunta}: kunta_oikein=false vain, jos se koskee toista kuntaa. Kunnan koulun sivu tai pdf kelpaa, jos siinä
+ovat lukuvuoden työ- ja loma-ajat. Jos joululomaa ei nimetä, anna syyslukukausi_loppu ja kevatlukukausi_alku.
+Jos dokumentissa on sekä perusopetus että esiopetus/lukio, anna perusopetuksen päivät (koulumuoto "perus"). Jos dokumentissa lukee ehdotus/luonnos/förslag/
 forslag tai päivät ovat muotoa xx.xx, tila = ehdotus. Kalenteriruudukossa koodit: HF=høstferie, JF=juleferie,
 VF=vinterferie, PF=påskeferie, SF/EF=sommer/elevfri; värikoodit selitteen mukaan. Kaksipalstaisessa
 ruudukossa syksy (elo–joulu) ja kevät (tammi–kesä) ovat eri palstoissa: syysloma on loka-marraskuussa, talviloma helmi-maaliskuussa.

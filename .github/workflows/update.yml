@@ -30,6 +30,11 @@ jobs:
         run: python3 run_all.py fi
       - run: python3 build/consolidate.py out_all > data/fi.json
       - run: PREVIEW=${{ vars.SITE_PREVIEW || '0' }} python3 build/build_site.py data/fi.json site
+      - name: D1-skeema (CREATE TABLE IF NOT EXISTS)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler@3 d1 execute koululomat --remote --file schema.sql --yes
       - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

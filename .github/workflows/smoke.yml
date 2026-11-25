@@ -1,0 +1,40 @@
+name: Koululomat tarkistus (julkaisun jälkeen)
+# Simuloi kävijät julkaistulla sivustolla: kaikki sivut ja linkit, mobiilinäkymä, iPhone (WebKit) ja Android (Chromium),
+# haku, välilehdet, vertailu, ruotsi, ilmoituslomake (siepattu, ei lähetä mitään), laskuri tulevina päivinä, saavutettavuus, data.
+# Epäonnistunut tarkistus = punainen ajo -> GitHub lähettää ilmoituksen. Raportti ajon yhteenvedossa.
+on:
+  workflow_run:
+    workflows: ["Koululomat deploy (ulkoasu)"]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: smoke
+  cancel-in-progress: true
+jobs:
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Asennus
+        run: |
+          pip install -q playwright httpx
+          python -m playwright install --with-deps chromium webkit
+          npm install --no-save --silent axe-core@4
+      - name: Odota julkaisun leviämistä
+        run: sleep 45
+      - name: Tarkistus
+        run: python tests/smoke.py https://koululomat.fi --axe node_modules/axe-core/axe.min.js
+      - name: Raportti talteen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-report
+          path: smoke_report.md
+          if-no-files-found: ignore

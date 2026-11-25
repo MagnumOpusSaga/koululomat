@@ -76,9 +76,9 @@ def _faq(items):
     return "".join(f"<details{' open' if i == 0 else ''}><summary>{html.escape(q)}</summary><p>{a}</p></details>" for i, (q, a) in enumerate(items))
 
 
-def _schema(title, desc, path, base, today, faq):
+def _schema(title, desc, path, base, today, faq, lang="fi"):
     return [{"@context": "https://schema.org", "@type": "Article", "headline": title, "description": desc,
-             "datePublished": "2026-11-24", "dateModified": today.isoformat(), "inLanguage": "fi", "mainEntityOfPage": base + path,
+             "datePublished": "2026-11-24", "dateModified": today.isoformat(), "inLanguage": lang, "mainEntityOfPage": base + path,
              "author": {"@type": "Organization", "name": "Koululomat.fi"},
              "publisher": {"@type": "Organization", "name": "BR Entertainment", "logo": {"@type": "ImageObject", "url": base + "/icon-512.png"}}},
             {"@context": "https://schema.org", "@type": "FAQPage",

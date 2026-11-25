@@ -16,7 +16,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import articles  # noqa: E402
+import articles
+import sv_pages  # noqa: E402
 
 PREVIEW = os.environ.get("PREVIEW", "1") == "1"
 BASE = os.environ.get("SITE_URL", "https://koululomat.fi")
@@ -203,6 +204,7 @@ a.card{text-decoration:none;color:#2A1B0F}a.card:hover{transform:translateY(-2px
 .wkb{width:62px;height:62px;border-radius:18px;background:var(--bg);color:var(--c);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;line-height:1}
 .wkb small{font-size:12px;font-weight:800}.wkb b{font-size:24px;font-weight:900}
 .az{scroll-margin-top:16px}
+.src,.src a,td a{overflow-wrap:anywhere}
 .lnote{background:#FFF0C7;border-radius:14px;padding:10px 14px;font-size:15px;font-weight:700;margin:0 0 14px}
 .lng{margin:0 0 -6px;text-align:right;font-size:14px;font-weight:800}.lng a{color:#6B5847}
 .tabs{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap}.tabs button{font:inherit;font-weight:800;font-size:15px;padding:9px 16px;border-radius:999px;border:2px solid #E8D9C4;background:#fff;color:#2A1B0F;cursor:pointer}
@@ -267,7 +269,34 @@ def theme_style(t):
     return f"--hero:{h};--hs:{hs};--ht:{ht};--tint:{tint};--bar:{bar};--track:{track}"
 
 
+def fit(*cands, n=62):
+    """Ensimmäinen otsikkovaihtoehto, joka mahtuu Googlen hakutulokseen (~60 merkkiä)."""
+    return next((c for c in cands if len(c) <= n), cands[-1])
+
+
+def short_title(t, n=62):
+    if len(t) <= n:
+        return t
+    if t.endswith(" | Koululomat"):
+        t = t[:-13]
+    if len(t) > n:  # katkaise luontevasta kohdasta ("…2026? Joulujuhla…" -> "…2026?")
+        cut = [i + 1 for i, c in enumerate(t) if c in "?:" and 25 < i < n] + [i for i in range(25, min(n, len(t))) if t[i:i + 3] == " – "]
+        if cut:
+            t = t[:max(cut)].rstrip(" –:")
+    return t
+
+
+# fi <-> sv -vastinesivut (hreflang)
+ALT = {"/fi/syysloma/": "/sv/hostlov/", "/fi/joululoma/": "/sv/jullov/", "/fi/hiihtoloma-2027/": "/sv/sportlov-2027/",
+       "/fi/kesaloma/": "/sv/sommarlov/", "/artikkelit/hiihtoloma-2027/": "/sv/artiklar/sportlov-2027/",
+       "/artikkelit/joululoma-2026/": "/sv/artiklar/jullov-2026/", "/": "/sv/"}
+ALT_REV = {v: k for k, v in ALT.items()}
+
+
 def page(title, desc, body, path, schema=None, theme="brand", top_search=True, lang="fi", alt=None):
+    title = short_title(title)
+    if not alt and (path in ALT or path in ALT_REV):
+        alt = {"fi": ALT_REV.get(path, path), "sv": ALT.get(path, path)}
     robots = '<meta name="robots" content="noindex,nofollow">' if PREVIEW else ""
     pv = f'<div class="pv">{T[lang]["pv"]}</div>' if PREVIEW else ""
     hl = "".join(f'<link rel="alternate" hreflang="{lg}" href="{BASE}{p}">' for lg, p in (alt or {}).items())
@@ -395,7 +424,7 @@ def cards(rec, today, year, lang="fi"):
         now = bool(nxt and nxt[0] == k and nxt[3] == year)
         h = HOL[k]
         cls = " now" if now else (" past" if past else "")
-        tag = (f'a href="{HPAGE[k][0]}"' if lang == "fi" else "div") + f' data-k="{k}" data-a="{a.isoformat()}" data-b="{b.isoformat()}"'
+        tag = (f'a href="{HPAGE[k][0]}"' if lang == "fi" else f'a href="{sv_pages.HPAGE_SV[k][0]}"') + f' data-k="{k}" data-a="{a.isoformat()}" data-b="{b.isoformat()}"'
         items.append(f'<{tag} class="card{cls}" style="--c:{h["c"]}"><div class="ic" style="background:{h["bg"]}">{icon(k, 26)}</div>'
                      f'<b>{L["hol"][k]}</b><span class="dt">{dt}</span><span class="n" style="color:{"#6B5847" if past else h["c"]}">{n}</span></{tag.split()[0]}>')
     return f'<div class="grid">{"".join(items)}</div>'
@@ -577,7 +606,11 @@ def build(data_path, out_dir):
         schema = {"@context": "https://schema.org", "@type": "WebPage", "name": f"Koulujen lomat {rec['name']}",
                   "about": {"@type": "City", "name": rec["name"]}}
         th = "brand" if not nk or rec["years"].get(y1, {}).get("confidence") == "arvio" else nk
-        write(f"/fi/{s}/", page(f"{rec['name']}: koulujen lomat 2026–2027 – syysloma, joululoma, hiihtoloma | Koululomat", desc, body, f"/fi/{s}/", schema, theme=th, alt=alt))
+        nm0 = rec["name"].split(" - ")[0]
+        ttl = fit(*([f"{nm0}: koulujen lomat 2026–27, hiihtoloma vk {week(tal['start'])} | Koululomat",
+                     f"{nm0}: koululomat 2026–27, hiihtoloma vk {week(tal['start'])}"] if tal and rec["years"][y1]["confidence"] != "arvio" else []),
+                  f"{nm0}: koulujen lomat 2026–2027 | Koululomat", f"{nm0}: koulujen lomat 2026–2027")
+        write(f"/fi/{s}/", page(ttl, desc, body, f"/fi/{s}/", schema, theme=th, alt=alt))
         (out / "fi" / s / "lomat.ics").write_text(ics(rec), encoding="utf-8")
         urls.append(f"/fi/{s}/")
         ac.append({"n": rec["name"], "sv": rec.get("name_sv") or "", "s": s, "r": rec["region"],
@@ -611,7 +644,7 @@ def build(data_path, out_dir):
             yy[y] = e
         lomat[slug(rec["name"])] = {"n": rec["name"], "y": yy}
     (out / "lomat.json").write_text(json.dumps(lomat, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    write("/vertaa/", page("Vertaa kahden kunnan koululomia – esim. oma kunta ja mummola | Koululomat",
+    write("/vertaa/", page("Vertaa kahden kunnan koululomia | Koululomat",
                            "Vertaa kahden kunnan syys-, joulu-, hiihto- ja kesälomia. Näet heti, onko lomaa yhtä aikaa.",
                            f'<h1>Vertaa kahta kuntaa</h1><p class="sub">Esimerkiksi oma kunta ja mummola tai serkkujen kunta: onko lomaa yhtä aikaa?</p>'
                            f'<div class="layout" style="gap:12px">{search_form("qa", "Ensimmäinen kunta", big=True, pick="a")}{search_form("qb", "Toinen kunta", big=True, pick="b")}</div>'
@@ -622,7 +655,7 @@ def build(data_path, out_dir):
     # svenska: tvåspråkiga kommuner och Åland
     L = T["sv"]
     sv_items = []
-    sv_lomat = {}
+    sv_lomat, sv_views = {}, []
     for rec0 in sorted(sv_recs, key=lambda r: slug(r.get("name_sv") or r["name"])):
         rec, note = view(raw_by_id[rec0["id"]], "sv")
         s, ss = slug(rec["name"]), sv_slug[rec["id"]]
@@ -643,10 +676,12 @@ def build(data_path, out_dir):
         tal = (rec["years"].get(y1) or {}).get("fields", {}).get("talvi")
         desc = (f"{nm}: höstlov, jullov och sportlov" + (f" (vecka {week(tal['start'])})" if tal else "") + " samt skolans start och slut. Nedräkning och källor.")
         th = "brand" if not nk or rec["years"].get(y1, {}).get("confidence") == "arvio" else nk
-        write(f"/sv/{ss}/", page(f"{nm}: skolornas lov 2026–2027 – höstlov, jullov, sportlov | Koululomat", desc, body, f"/sv/{ss}/",
+        write(f"/sv/{ss}/", page(fit(*([f"{nm}: skolornas lov 2026–27, sportlov v. {week(tal['start'])} | Koululomat"] if tal and rec["years"][y1]["confidence"] != "arvio" else []),
+                                     f"{nm}: skolornas lov 2026–2027 | Koululomat", f"{nm}: skolornas lov 2026–2027"), desc, body, f"/sv/{ss}/",
                                  {"@context": "https://schema.org", "@type": "WebPage", "name": f"Skolornas lov {nm}", "inLanguage": "sv",
                                   "about": {"@type": "City", "name": nm}}, theme=th, lang="sv", alt=alt))
         urls.append(f"/sv/{ss}/")
+        sv_views.append((rec, ss, nm))
         (out / "sv" / ss / "lov.ics").write_text(ics(rec, "sv", f"{BASE}/sv/{ss}/"), encoding="utf-8")
         sv_lomat[s] = {y: {"c": v["confidence"], **{k: [v["fields"][k]["start"], v["fields"][k]["end"]] for k in ("syys", "joulu", "talvi") if k in v["fields"]},
                            **({"kesa": v["fields"]["end"]["start"]} if "end" in v["fields"] else {})} for y, v in rec["years"].items()}
@@ -654,17 +689,26 @@ def build(data_path, out_dir):
         if nk:
             nn = nights(nd, today)
             nxt = f"{L['hol'][nk]} om {nn} {L['night'](nn)}" if nn > 0 else f"{L['hol'][nk]} nu"
-        sv_items.append(f'<li><a href="/sv/{ss}/">{nm}</a> <small>{nxt}</small></li>')
+        sv_items.append(f'<li><a href="/sv/{ss}/">{nm}</a></li>')
     for s_, ys_ in sv_lomat.items():
         if s_ in lomat:
             lomat[s_]["sv"] = ys_
     (out / "lomat.json").write_text(json.dumps(lomat, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    sv_arts, sv_urls = sv_pages.build(sv_views, today, write, {"page": page, "search_form": search_form, "icon": icon, "HOL": HOL, "DARK": DARK,
+                                                               "HPAGE": HPAGE, "BASE": BASE, "schema": articles._schema, "faq": articles._faq})
+    urls += sv_urls
+    sv_tiles = "".join(f'<a class="tile" href="{sv_pages.HPAGE_SV[k][0]}" style="--bg:{HOL[k]["bg"]};--c:{HOL[k]["c"]};--ct:{DARK[k]}">'
+                       f'<div class="ic">{icon(k, 26)}</div><b>{T["sv"]["hol"][k]}</b><span>{sv_pages.HPAGE_SV[k][1]}</span></a>' for k in ("syys", "joulu", "talvi", "kesa"))
+    sv_acards = "".join(f'<a class="acard" href="{a["path"]}" style="--c:{HOL[a["k"]]["c"]}"><div class="ic" style="background:{HOL[a["k"]]["bg"]};flex:none">{icon(a["k"], 26)}</div>'
+                        f'<div><b>{a["title"]}</b><span>{a["sub"]}</span></div></a>' for a in sv_arts)
     sv_body = (f'<p class="lng"><a href="/" hreflang="fi" lang="fi">Suomeksi</a></p><h1 class="hh">Hur många nätter till lovet?</h1>'
                f'<p class="sub">Skriv din kommun.</p>{search_form("q2", big=True, lang="sv")}'
                f'<p class="trust"><span class="b ok">✓ Kommunens egen källa</span>Höstlov, jullov, sportlov och sommarlov 2026–2027</p>'
-               f'<h2>Tvåspråkiga kommuner och Åland</h2><section class="box"><ul class="list" style="columns:2 220px">{"".join(sv_items)}</ul></section>'
+               f'<h2>Eller se ett lov i taget</h2><div class="tiles">{sv_tiles}</div>'
+               + (f'<h2 style="margin-top:30px">Aktuellt</h2><div class="acards">{sv_acards}</div>' if sv_acards else "") +
+               f'<h2 style="margin-top:30px">Tvåspråkiga kommuner och Åland</h2><section class="box"><ul class="list" style="columns:2 220px">{"".join(sv_items)}</ul></section>'
                f'<p class="src">Övriga kommuner finns <a href="/haku/" lang="fi">på finska</a>. Uppgifterna kommer från varje kommuns eget beslut om skolornas arbets- och lovtider.</p>')
-    write("/sv/", page("Skolornas lov per kommun 2026–2027 – höstlov, jullov, sportlov | Koululomat",
+    write("/sv/", page("Skolornas lov per kommun 2026–2027 | Koululomat",
                        "Hur många nätter till lovet? Skolornas höst-, jul- och sportlov i tvåspråkiga kommuner och på Åland. Uppgifter från kommunernas egna källor.",
                        sv_body, "/sv/", {"@context": "https://schema.org", "@type": "WebSite", "name": "Koululomat", "url": BASE + "/sv/", "inLanguage": "sv"},
                        top_search=False, lang="sv", alt={"fi": "/", "sv": "/sv/"}))
@@ -741,7 +785,7 @@ def build(data_path, out_dir):
               f'<div class="wk" style="margin-top:22px">{cols}</div>')
         if k in ART_LINK:
             hb += ART_LINK[k]
-        write(path, page(f"{label} kunnittain – kaikki Suomen kunnat | Koululomat",
+        write(path, page(f"{label} kunnittain – kaikki kunnat | Koululomat",
                          f"{label}: koulujen loma-ajat kaikissa Suomen kunnissa. Tiedot kuntien omista lähteistä.", hb, path, theme=k, top_search=False))
         urls.append(path)
 
@@ -760,7 +804,7 @@ def build(data_path, out_dir):
             f'<h2 style="margin-top:30px">Ajankohtaista</h2><div class="acards">{acards}</div>'
             f'<h2 style="margin-top:30px">Kaikki kunnat</h2><div class="letters">{letters}</div>')
     body = '<p class="lng"><a href="/sv/" hreflang="sv" lang="sv">På svenska</a></p>' + body
-    write("/", page("Koulujen lomat kunnittain 2026–2027 – syysloma, joululoma, hiihtoloma | Koululomat",
+    write("/", page("Koululomat 2026–2027 kunnittain – montako yötä lomaan?",
                     "Montako yötä lomaan? Koulujen syys-, joulu- ja hiihtolomat jokaisessa Suomen kunnassa. Tiedot kuntien omista lähteistä.",
                     body, "/", {"@context": "https://schema.org", "@type": "WebSite", "name": "Koululomat", "url": BASE + "/",
                                 "publisher": {"@type": "Organization", "name": "BR Entertainment", "logo": BASE + "/icon-512.png"}},

@@ -41,6 +41,7 @@ THEME = {"brand": ("#E8741E", "#B4530F", "#fff", "#FFF6E5", "#FFE08A", "rgba(255
          "joulu": ("#15803D", "#0E5A2B", "#fff", "#EFF8F1", "#FFE08A", "rgba(255,255,255,.3)"),
          "talvi": ("#1D6FB8", "#0F4A80", "#fff", "#EEF4FB", "#FFE08A", "rgba(255,255,255,.3)"),
          "kesa": ("#FFB627", "#C98A0B", "#2A1B0F", "#FFF8E1", "#2A1B0F", "rgba(42,27,15,.15)")}
+DARK = {"syys": "#8A2E08", "joulu": "#0E5A2B", "talvi": "#0F4A80", "kesa": "#7A4F00"}  # lomavärin tumma sävy tekstiin vaalealla pohjalla (≥ 7:1)
 HPAGE = {"syys": ("/fi/syysloma/", "Syysloma 2026"), "joulu": ("/fi/joululoma/", "Joululoma 2026–2027"),
          "talvi": ("/fi/hiihtoloma-2027/", "Hiihtoloma 2027"), "kesa": ("/fi/kesaloma/", "Kesäloma 2027")}
 CONF = {"varmistettu": ("Varmistettu", "ok", "Kunnan oma lähde, ja koulupäivien laskenta täsmää lakiin."),
@@ -100,6 +101,37 @@ T = {"fi": {"wd": WD, "hol": {k: v["name"] for k, v in HOL.items()}, "week": "vi
             "pv": "Förhandsvisning – uppgifterna kontrolleras ännu.",
             "foot": 'Uppgifter från kommunens egen källa · Inga kakor, ingen spårning · <a href="/tietoa/">Om tjänsten (på finska)</a> · <a href="/tietosuoja/">Dataskydd (på finska)</a>',
             "home": "/sv/"}}
+
+
+def view(rec, lang):
+    """Sivun kielen koulujen päivät. Kaksikielisissä kunnissa fi- ja sv-koulujen lomat voivat erota (Vantaa: höstlov 14.–16.10.).
+    -> (tietue, huomautus): huomautus kertoo, jos päivät koskevat toisenkielisiä kouluja."""
+    if rec.get("variant", "fi") == lang or not rec["years"]:
+        return rec, None
+    alt = (rec.get("alt") or {}).get(lang)
+    if alt:
+        yrs = dict(alt)
+        other = [y for y in rec["years"] if y not in alt]
+        for y in other:
+            yrs[y] = rec["years"][y]
+        return dict(rec, years=dict(sorted(yrs.items())), forms={}), ("mixed", other) if other else None
+    if rec["region"] == "Ahvenanmaa":
+        return rec, None
+    return dict(rec, forms={}), ("other", list(rec["years"]))
+
+
+LANG_NOTE = {"fi": "Päivät koskevat kunnan ruotsinkielisiä kouluja – suomenkielisten koulujen päiviä ei löytynyt erikseen. Suomenkielisten koulujen lomat voivat poiketa, tarkista koululta.",
+             "sv": "Uppgifterna gäller kommunens finskspråkiga skolor – de svenskspråkiga skolornas lov hittades inte separat. Svenska skolor kan ha avvikande lov, kontrollera med skolan.",
+             "fi_mixed": "Lukuvuosi {y}: päivät koskevat ruotsinkielisiä kouluja (suomenkielisten päiviä ei vielä löytynyt).",
+             "sv_mixed": "Läsåret {y}: uppgifterna gäller de finskspråkiga skolorna (de svenskspråkigas lov hittades inte ännu)."}
+
+
+def lang_note(note, lang):
+    if not note:
+        return ""
+    kind, ys = note
+    t = LANG_NOTE[lang] if kind == "other" else " ".join(LANG_NOTE[lang + "_mixed"].format(y=y.replace("-", "–")) for y in ys)
+    return f'<p class="lnote">ⓘ {t}</p>'
 
 
 def slug(s):
@@ -162,8 +194,8 @@ header.top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:16px 
 .trust{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;font-weight:800;color:#6B5847;margin:14px 0 28px}
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .tile{display:flex;flex-direction:column;gap:4px;min-height:132px;padding:16px;border-radius:26px;text-decoration:none;color:#2A1B0F;background:var(--bg);box-shadow:0 5px 0 var(--c)}
-.tile:hover{color:#2A1B0F;transform:translateY(-2px)}.tile b{font-size:20px;font-weight:900;margin-top:6px}.tile span{font-size:15px;font-weight:900;color:var(--c)}
-.tile .ic{background:#fff}.tile.past{opacity:.7}
+.tile:hover{color:#2A1B0F;transform:translateY(-2px)}.tile b{font-size:20px;font-weight:900;margin-top:6px}.tile span{font-size:15px;font-weight:900;color:var(--ct,var(--c))}
+.tile .ic{background:#fff}.tile.past{background:#F1ECE4;box-shadow:0 5px 0 #CFC4B5}.tile.past span{color:#5E4E3F}.tile.past .ic{filter:grayscale(1)}
 .letters{display:flex;flex-wrap:wrap;gap:8px}.letters a{width:46px;height:46px;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;text-decoration:none;color:#2A1B0F;box-shadow:0 3px 0 #F0D9B5}
 .letters a:hover{background:var(--hero,#E8741E);color:var(--ht,#fff)}
 a.card{text-decoration:none;color:#2A1B0F}a.card:hover{transform:translateY(-2px)}
@@ -171,6 +203,7 @@ a.card{text-decoration:none;color:#2A1B0F}a.card:hover{transform:translateY(-2px
 .wkb{width:62px;height:62px;border-radius:18px;background:var(--bg);color:var(--c);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;line-height:1}
 .wkb small{font-size:12px;font-weight:800}.wkb b{font-size:24px;font-weight:900}
 .az{scroll-margin-top:16px}
+.lnote{background:#FFF0C7;border-radius:14px;padding:10px 14px;font-size:15px;font-weight:700;margin:0 0 14px}
 .lng{margin:0 0 -6px;text-align:right;font-size:14px;font-weight:800}.lng a{color:#6B5847}
 .tabs{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap}.tabs button{font:inherit;font-weight:800;font-size:15px;padding:9px 16px;border-radius:999px;border:2px solid #E8D9C4;background:#fff;color:#2A1B0F;cursor:pointer}
 .tabs button[aria-selected=true]{background:#2A1B0F;border-color:#2A1B0F;color:#fff}.tabs button:focus-visible{outline:3px solid #E8741E;outline-offset:2px}
@@ -186,13 +219,13 @@ h2{font-size:22px;font-weight:900;margin:0 0 10px}
 .hero .lead{font-size:20px;font-weight:800;margin:6px 0 0}
 .hero .big{font-size:120px;line-height:.95;font-weight:900;letter-spacing:-.03em}
 .hero .unit{font-size:30px;font-weight:900;margin:0}
-.share{display:inline-flex;align-items:center;gap:8px;min-height:48px;margin:12px 0 4px;padding:0 20px;border-radius:99px;border:2px solid currentColor;background:rgba(255,255,255,.18);color:inherit;font:900 17px Nunito,system-ui;cursor:pointer}.share:hover{background:rgba(255,255,255,.3)}.share[hidden]{display:none}
+.share{display:inline-flex;align-items:center;gap:8px;min-height:48px;margin:12px 0 4px;padding:0 20px;border-radius:99px;border:2px solid currentColor;background:rgba(0,0,0,.2);color:inherit;font:900 17px Nunito,system-ui;cursor:pointer}.share:hover{background:rgba(0,0,0,.3)}.share[hidden]{display:none}
 .hero .when{font-size:19px;font-weight:800;margin:8px 0 0}
 .bar{width:100%;max-width:420px;margin-top:14px}.bar>div{height:18px;border-radius:99px;background:var(--track,rgba(255,255,255,.3));overflow:hidden}
 .bar i{display:block;height:100%;border-radius:99px;background:var(--bar,#FFE08A)}.bar p{margin:6px 0 0;font-size:19px;font-weight:800}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .card{background:#fff;border-radius:26px;padding:16px;box-shadow:0 4px 0 #F0D9B5;display:flex;flex-direction:column;gap:2px}
-.card.now{outline:3px solid var(--c);box-shadow:0 4px 0 var(--c)}.card.past{opacity:.75}
+.card.now{outline:3px solid var(--c);box-shadow:0 4px 0 var(--c)}.card.card.past{background:#FAF7F2}.card.past .ic{filter:grayscale(1)}.card.past .dt{color:#5E4E3F}
 .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
 .card b{font-size:18px;font-weight:900}.card .dt{font-weight:700;color:#5F4B3A}.card .n{font-size:15px;font-weight:900;margin-top:4px}
 .btns{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0}
@@ -223,7 +256,7 @@ footer.bot{padding:26px 0 40px;font-size:14px;color:#6B5847;text-align:center}
 def search_form(fid, placeholder=None, big=False, prefix=None, main=False, pick=None, lang="fi"):
     placeholder = placeholder or T[lang]["ph"]
     pre = (f' data-prefix="{prefix}"' if prefix else "") + (f' data-pick="{pick}"' if pick else "")
-    return (f'<form class="search{" lg" if big else ""}" action="{"/sv/" if lang == "sv" else "/haku/"}" role="search"{pre}{" data-main" if main else ""}>'
+    return (f'<form class="search{" lg" if big else ""}" action="{"/sv/" if lang == "sv" else "/haku/"}" role="search" aria-label="{html.escape(placeholder)}"{pre}{" data-main" if main else ""}>'
             f'<label class="sr" for="{fid}">{T[lang]["search"]}</label><div class="ac"><input id="{fid}" name="q" type="search" placeholder="{placeholder}" '
             f'role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="{fid}-l" autocomplete="off" autocapitalize="words" spellcheck="false">'
             f'<div class="acl" id="{fid}-l" role="listbox" hidden></div></div></form>')
@@ -321,7 +354,7 @@ def hero(rec, today, lang="fi"):
         body = (f'<p class="lead">{L["to"](k)}</p><div class="big" id="cd" data-d="{a.isoformat()}">{n}</div>'
                 f'<p class="unit">{L["night"](n)}!</p>{share_btn(nm, hol=hv, lang=lang)}')
     est = conf == "arvio"
-    return (f'<section class="hero{" est" if est else ""}" aria-label="{"Lähtölaskuri" if lang == "fi" else "Nedräkning"}">{icon(k, 64, "currentColor")}{body}'
+    return (f'<section class="hero{" est" if est else ""}" data-live aria-label="{"Lähtölaskuri" if lang == "fi" else "Nedräkning"}">{icon(k, 64, "currentColor")}{body}'
             f'<p class="when">{when}{f" ({L["est"]})" if est else ""}</p><p style="margin:6px 0 0">{badge(conf, lang)}</p>{bar}</section>')
 
 
@@ -362,7 +395,7 @@ def cards(rec, today, year, lang="fi"):
         now = bool(nxt and nxt[0] == k and nxt[3] == year)
         h = HOL[k]
         cls = " now" if now else (" past" if past else "")
-        tag = f'a href="{HPAGE[k][0]}"' if lang == "fi" else "div"
+        tag = (f'a href="{HPAGE[k][0]}"' if lang == "fi" else "div") + f' data-k="{k}" data-a="{a.isoformat()}" data-b="{b.isoformat()}"'
         items.append(f'<{tag} class="card{cls}" style="--c:{h["c"]}"><div class="ic" style="background:{h["bg"]}">{icon(k, 26)}</div>'
                      f'<b>{L["hol"][k]}</b><span class="dt">{dt}</span><span class="n" style="color:{"#6B5847" if past else h["c"]}">{n}</span></{tag.split()[0]}>')
     return f'<div class="grid">{"".join(items)}</div>'
@@ -440,9 +473,22 @@ def form_table(rec, F, full, upd, lang="fi"):
             f'<p class="src">{L["fsrc"]}<br>{L["src"]} – {sl}. {L["upd"]} {upd.day}.{upd.month}.{upd.year}.</p>')
 
 
-def ics(rec):
-    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Koululomat//FI", "CALSCALE:GREGORIAN",
-             f"X-WR-CALNAME:Koululomat – {rec['name']}", "X-PUBLISHED-TTL:P1W"]
+def live(rec, lang, year):
+    """Selaimen laskuri (live.js): lomat + valmiit palat, jotta laskuri ja kortit ovat oikein rakennusten välilläkin."""
+    nm = rec["name"] if lang == "fi" else (rec.get("name_sv") or rec["name"])
+    blob = {"h": [[k, a.isoformat(), b.isoformat(), y, c] for k, a, b, y, c in holidays_of(rec)],
+            "s": {y: v["fields"]["start"]["start"] for y, v in rec["years"].items() if "start" in v["fields"]},
+            "i": {k: icon(k, 64, "currentColor") for k in HOL}, "n": nm, "cy": year,
+            "sh": f'{SHARE_SVG}<span>{T[lang]["share"]}</span>', "bd": {c: badge(c, lang) for c in CONF},
+            "th": {t: theme_style(t) for t in THEME}}
+    js = json.dumps(blob, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    return f'<script type="application/json" id="hd">{js}</script><script src="/live.js"></script>'
+
+
+def ics(rec, lang="fi", url=None):
+    nm = rec["name"] if lang == "fi" else (rec.get("name_sv") or rec["name"])
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", f"PRODID:-//Koululomat//{lang.upper()}", "CALSCALE:GREGORIAN",
+             f"X-WR-CALNAME:Koululomat – {nm}", "X-PUBLISHED-TTL:P1W"]
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     for y, v in rec["years"].items():
         for k in ("syys", "joulu", "talvi"):
@@ -452,23 +498,23 @@ def ics(rec):
             a, b = d(x["start"]), d(x["end"])
             while (b + timedelta(1)).weekday() >= 5:
                 b += timedelta(1)
-            tag = "" if v["confidence"] in ("varmistettu", "yksi_lähde") else f" ({CONF[v['confidence']][0].lower()})"
-            lines += ["BEGIN:VEVENT", f"UID:{rec['id']}-{y}-{k}@koululomat.fi", f"DTSTAMP:{stamp}",
+            tag = "" if v["confidence"] in ("varmistettu", "yksi_lähde") else f" ({T[lang]['conf'][v['confidence']].lower()})"
+            lines += ["BEGIN:VEVENT", f"UID:{rec['id']}-{y}-{k}{'' if lang == 'fi' else '-' + lang}@koululomat.fi", f"DTSTAMP:{stamp}",
                       f"DTSTART;VALUE=DATE:{a.strftime('%Y%m%d')}", f"DTEND;VALUE=DATE:{(b + timedelta(1)).strftime('%Y%m%d')}",
-                      f"SUMMARY:{HOL[k]['name']} – {rec['name']}{tag}", f"URL:{BASE}/fi/{slug(rec['name'])}/", "END:VEVENT"]
+                      f"SUMMARY:{T[lang]['hol'][k]} – {nm}{tag}", f"URL:{url or BASE + '/fi/' + slug(rec['name']) + '/'}", "END:VEVENT"]
     lines.append("END:VCALENDAR")
     return "\r\n".join(lines) + "\r\n"
 
 
 REPORT_FORM = """<details><summary>Ilmoita oikea päivä tai virhe</summary>
-<form method="post" action="/api/report"><input type="hidden" name="municipality" value="{id}">
+<form method="post" action="/api/report"><input type="hidden" name="municipality" value="{id}"><input type="hidden" name="back" value="{back}"><input type="hidden" name="lang" value="fi">
 <label for="m{id}">Mikä on väärin tai puuttuu?</label><textarea id="m{id}" name="message" rows="3" maxlength="600" required></textarea>
 <label for="s{id}">Linkki kunnan tai koulun lähteeseen (jos on)</label><input id="s{id}" name="source_url" type="url" maxlength="300">
 <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"><p><button class="btn" type="submit">Lähetä</button></p>
 <p class="src">Emme tallenna nimeä, sähköpostia emmekä IP-osoitetta. Luemme linkin ja tarkistamme tiedon.</p></form></details>"""
 
 REPORT_FORM_SV = """<details><summary>Meddela rätt datum eller ett fel</summary>
-<form method="post" action="/api/report"><input type="hidden" name="municipality" value="{id}">
+<form method="post" action="/api/report"><input type="hidden" name="municipality" value="{id}"><input type="hidden" name="back" value="{back}"><input type="hidden" name="lang" value="sv">
 <label for="m{id}">Vad är fel eller saknas?</label><textarea id="m{id}" name="message" rows="3" maxlength="600" required></textarea>
 <label for="s{id}">Länk till kommunens eller skolans källa (om du har)</label><input id="s{id}" name="source_url" type="url" maxlength="300">
 <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"><p><button class="btn" type="submit">Skicka</button></p>
@@ -480,7 +526,13 @@ var x=Math.round((t-n)/864e5),sv=document.documentElement.lang=='sv';if(x>=0){e.
 
 
 def build(data_path, out_dir):
-    data = json.loads(Path(data_path).read_text())
+    raw = json.loads(Path(data_path).read_text())
+    data, fi_note = [], {}
+    for r in raw:
+        v, note = view(r, "fi")
+        data.append(v)
+        fi_note[r["id"]] = note
+    raw_by_id = {r["id"]: r for r in raw}
     out = Path(out_dir)
     if out.exists():
         shutil.rmtree(out)
@@ -512,13 +564,13 @@ def build(data_path, out_dir):
             top = '<section class="box"><p>Tämän kunnan lomia ei vielä löytynyt. Jos tiedät lähteen, ilmoita se alla – luemme sen.</p></section>'
         cmp_url = HPAGE[nk][0] if nk else "/fi/hiihtoloma-2027/"
         body = ((f'<p class="lng"><a href="{alt["sv"]}" hreflang="sv" lang="sv">På svenska</a></p>' if alt else "")
-                + f'<h1>{rec["name"]}{sv}: koulujen lomat</h1>{top}'
+                + f'<h1>{rec["name"]}{sv}: koulujen lomat</h1>{lang_note(fi_note[rec["id"]], "fi")}{top}'
                 f'<div class="btns"><a class="btn" href="/fi/{s}/lomat.ics">Lisää lomat kalenteriin</a>'
                 f'<a class="btn alt" href="/vertaa/?a={s}">Vertaa toiseen kuntaan</a>'
                 f'<button class="btn alt" id="kuva" type="button" hidden data-s="{s}" data-y="{y1}"><span>Tallenna kuvana</span></button>'
                 f'<button class="btn alt" id="tulosta" type="button" hidden><span>Tulosta</span></button></div>'
                 f'<script src="/kuva.js" defer></script>'
-                f'{adult_table(rec)}{REPORT_FORM.format(id=rec["id"])}{COUNTDOWN_JS}')
+                f'{adult_table(rec)}{REPORT_FORM.format(id=rec["id"], back=f"/fi/{s}/")}{live(rec, "fi", y1) if rec["years"] else ""}')
         tal = (rec["years"].get(y1) or {}).get("fields", {}).get("talvi")
         desc = (f"{rec['name']}: syysloma, joululoma ja hiihtoloma" + (f" (vk {week(tal['start'])})" if tal else "")
                 + " sekä koulun alku ja loppu. Lähtölaskuri ja lähteet.")
@@ -529,18 +581,18 @@ def build(data_path, out_dir):
         (out / "fi" / s / "lomat.ics").write_text(ics(rec), encoding="utf-8")
         urls.append(f"/fi/{s}/")
         ac.append({"n": rec["name"], "sv": rec.get("name_sv") or "", "s": s, "r": rec["region"],
-                   "h": HOL[nk]["name"].lower() if nk else "", "d": nd.isoformat() if nd else "", "t": bool(tal),
-                   **({"ss": sv_slug[rec["id"]], "hs": T["sv"]["hol"][nk].lower() + "et" if nk else ""} if rec["id"] in sv_slug else {})})
+                   "u": [[k, a.isoformat(), b.isoformat()] for k, a, b, _, _ in holidays_of(rec) if b >= today], "t": bool(tal),
+                   **({"ss": sv_slug[rec["id"]]} if rec["id"] in sv_slug else {})})
         if tal:
             yv = rec["years"][y1]
             n = nights(d(tal["start"]), today)
             est = yv["confidence"] == "arvio"
             hb = (f'<h1>Hiihtoloma 2027 – {rec["name"]}</h1><section class="hero{" est" if est else ""}">{icon("talvi", 64, "currentColor")}'
-                  f'<p class="lead">Hiihtolomaan on</p><div class="big" id="cd" data-d="{tal["start"]}">{n}</div><p class="unit">{yo(n)}!</p>{share_btn(rec["name"], hol="hiihtoloma")}'
+                  f'<p class="lead">Hiihtolomaan on</p><div class="big" id="cd" data-d="{tal["start"]}" data-e="{tal["end"]}" data-k="talvi">{n}</div><p class="unit">{yo(n)}!</p>{share_btn(rec["name"], hol="hiihtoloma")}'
                   f'<p class="when">{fmt(tal["start"], tal["end"])} · viikko {week(tal["start"])}{" (arvio)" if est else ""}</p>'
                   f'<p style="margin:6px 0 0">{badge(yv["confidence"])}</p></section>'
                   f'<div class="btns"><a class="btn" href="/fi/{s}/lomat.ics">Lisää kalenteriin</a><a class="btn alt" href="/fi/{s}/">Kaikki lomat: {rec["name"]}</a>'
-                  f'<a class="btn alt" href="/fi/hiihtoloma-2027/">Muut kunnat</a></div>{adult_table(rec)}{COUNTDOWN_JS}')
+                  f'<a class="btn alt" href="/fi/hiihtoloma-2027/">Muut kunnat</a></div>{adult_table(rec)}<script src="/live.js"></script>')
             write(f"/fi/hiihtoloma-2027/{s}/", page(f"Hiihtoloma 2027 {rec['name']} – viikko {week(tal['start'])} | Koululomat",
                                                      f"{rec['name']}: hiihtoloma 2027 on {fmt(tal['start'], tal['end'])} (viikko {week(tal['start'])}). Lähtölaskuri ja lähde.",
                                                      hb, f"/fi/hiihtoloma-2027/{s}/", theme="talvi"))
@@ -563,14 +615,16 @@ def build(data_path, out_dir):
                            "Vertaa kahden kunnan syys-, joulu-, hiihto- ja kesälomia. Näet heti, onko lomaa yhtä aikaa.",
                            f'<h1>Vertaa kahta kuntaa</h1><p class="sub">Esimerkiksi oma kunta ja mummola tai serkkujen kunta: onko lomaa yhtä aikaa?</p>'
                            f'<div class="layout" style="gap:12px">{search_form("qa", "Ensimmäinen kunta", big=True, pick="a")}{search_form("qb", "Toinen kunta", big=True, pick="b")}</div>'
-                           f'<div id="cmp" data-year="2026-2027"></div><script src="/vertaa.js" defer></script>', "/vertaa/", top_search=False))
+                           f'<div id="cmp" data-year="2026-2027"></div><noscript><p class="box">Vertailu tarvitsee JavaScriptin. Voit katsoa kuntien lomat myös <a href="/haku/">kuntalistasta</a>.</p></noscript><script src="/vertaa.js" defer></script>', "/vertaa/", top_search=False))
     urls.append("/vertaa/")
     (out / "kunnat.json").write_text(json.dumps(sorted(ac, key=lambda x: x["n"]), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     # svenska: tvåspråkiga kommuner och Åland
     L = T["sv"]
     sv_items = []
-    for rec in sorted(sv_recs, key=lambda r: slug(r.get("name_sv") or r["name"])):
+    sv_lomat = {}
+    for rec0 in sorted(sv_recs, key=lambda r: slug(r.get("name_sv") or r["name"])):
+        rec, note = view(raw_by_id[rec0["id"]], "sv")
         s, ss = slug(rec["name"]), sv_slug[rec["id"]]
         nm = rec.get("name_sv") or rec["name"]
         fi_nm = rec["name"].split(" - ")[0]
@@ -581,11 +635,11 @@ def build(data_path, out_dir):
         else:
             top = '<section class="box"><p>Kommunens lov har inte hittats ännu. Om du känner till källan, meddela den nedan – vi läser den.</p></section>'
         body = (f'<p class="lng"><a href="/fi/{s}/" hreflang="fi" lang="fi">Suomeksi</a></p>'
-                f'<h1>{nm}{f" ({fi_nm})" if fi_nm != nm else ""}: skolornas lov</h1>{top}'
-                f'<div class="btns"><a class="btn" href="/fi/{s}/lomat.ics">Lägg till i kalendern</a>'
-                f'<button class="btn alt" id="kuva" type="button" hidden data-s="{s}" data-y="{y1}" data-n="{html.escape(nm)}"><span>Spara som bild</span></button>'
+                f'<h1>{nm}{f" ({fi_nm})" if fi_nm != nm else ""}: skolornas lov</h1>{lang_note(note, "sv")}{top}'
+                f'<div class="btns"><a class="btn" href="/sv/{ss}/lov.ics">Lägg till i kalendern</a>'
+                f'<button class="btn alt" id="kuva" type="button" hidden data-s="{s}" data-y="{y1}" data-n="{html.escape(nm)}" data-l="sv"><span>Spara som bild</span></button>'
                 f'<button class="btn alt" id="tulosta" type="button" hidden><span>Skriv ut</span></button></div>'
-                f'<script src="/kuva.js" defer></script>{adult_table(rec, "sv")}{REPORT_FORM_SV.format(id=rec["id"])}{COUNTDOWN_JS}')
+                f'<script src="/kuva.js" defer></script>{adult_table(rec, "sv")}{REPORT_FORM_SV.format(id=rec["id"], back=f"/sv/{ss}/")}{live(rec, "sv", y1) if rec["years"] else ""}')
         tal = (rec["years"].get(y1) or {}).get("fields", {}).get("talvi")
         desc = (f"{nm}: höstlov, jullov och sportlov" + (f" (vecka {week(tal['start'])})" if tal else "") + " samt skolans start och slut. Nedräkning och källor.")
         th = "brand" if not nk or rec["years"].get(y1, {}).get("confidence") == "arvio" else nk
@@ -593,11 +647,18 @@ def build(data_path, out_dir):
                                  {"@context": "https://schema.org", "@type": "WebPage", "name": f"Skolornas lov {nm}", "inLanguage": "sv",
                                   "about": {"@type": "City", "name": nm}}, theme=th, lang="sv", alt=alt))
         urls.append(f"/sv/{ss}/")
+        (out / "sv" / ss / "lov.ics").write_text(ics(rec, "sv", f"{BASE}/sv/{ss}/"), encoding="utf-8")
+        sv_lomat[s] = {y: {"c": v["confidence"], **{k: [v["fields"][k]["start"], v["fields"][k]["end"]] for k in ("syys", "joulu", "talvi") if k in v["fields"]},
+                           **({"kesa": v["fields"]["end"]["start"]} if "end" in v["fields"] else {})} for y, v in rec["years"].items()}
         nxt = ""
         if nk:
             nn = nights(nd, today)
             nxt = f"{L['hol'][nk]} om {nn} {L['night'](nn)}" if nn > 0 else f"{L['hol'][nk]} nu"
         sv_items.append(f'<li><a href="/sv/{ss}/">{nm}</a> <small>{nxt}</small></li>')
+    for s_, ys_ in sv_lomat.items():
+        if s_ in lomat:
+            lomat[s_]["sv"] = ys_
+    (out / "lomat.json").write_text(json.dumps(lomat, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     sv_body = (f'<p class="lng"><a href="/" hreflang="fi" lang="fi">Suomeksi</a></p><h1 class="hh">Hur många nätter till lovet?</h1>'
                f'<p class="sub">Skriv din kommun.</p>{search_form("q2", big=True, lang="sv")}'
                f'<p class="trust"><span class="b ok">✓ Kommunens egen källa</span>Höstlov, jullov, sportlov och sommarlov 2026–2027</p>'
@@ -658,10 +719,10 @@ def build(data_path, out_dir):
                 yr = 2026 if k == "syys" else 2027
                 mon = date.fromisocalendar(yr, key, 1)
                 fri = mon + timedelta(4)
-                badge_html = f'<div class="wkb" style="--bg:{h["bg"]};--c:{h["c"]}"><small>vk</small><b>{key}</b></div>'
+                badge_html = f'<div class="wkb" style="--bg:{h["bg"]};--c:{DARK[k]}"><small>vk</small><b>{key}</b></div>'
                 title = f"{mon.day}.{mon.month}.–{fri.day}.{fri.month}.{fri.year}"
             else:
-                badge_html = f'<div class="wkb" style="--bg:{h["bg"]};--c:{h["c"]}"><small>{WD[key.weekday()]}</small><b>{key.day}.{key.month}.</b></div>'
+                badge_html = f'<div class="wkb" style="--bg:{h["bg"]};--c:{DARK[k]}"><small>{WD[key.weekday()]}</small><b>{key.day}.{key.month}.</b></div>'
                 title = (f"Koulu loppuu {WD[key.weekday()]} {key.day}.{key.month}.{key.year}" if k == "kesa"
                          else f"Alkaa {WD[key.weekday()]} {key.day}.{key.month}.{key.year}")
             link = (lambda r: f"/fi/hiihtoloma-2027/{slug(r['name'])}/") if k == "talvi" else (lambda r: f"/fi/{slug(r['name'])}/")
@@ -686,7 +747,7 @@ def build(data_path, out_dir):
 
     # etusivu (E1: haku ensin + lomat värillisinä valintoina)
     n_ok = sum(1 for r in data if (r["years"].get(y1) or {}).get("confidence") in ("varmistettu", "yksi_lähde"))
-    tiles = "".join(f'<a class="tile{" past" if summary[k][1] else ""}" href="{HPAGE[k][0]}" style="--bg:{HOL[k]["bg"]};--c:{HOL[k]["c"]}">'
+    tiles = "".join(f'<a class="tile{" past" if summary[k][1] else ""}" href="{HPAGE[k][0]}" style="--bg:{HOL[k]["bg"]};--c:{HOL[k]["c"]};--ct:{DARK[k]}">'
                     f'<div class="ic">{icon(k, 26)}</div><b>{HOL[k]["name"]}</b><span>{summary[k][0]}</span></a>'
                     for k in ("syys", "joulu", "talvi", "kesa"))
     letters_set = sorted({r["name"][0].upper() for r in data}, key=lambda c: "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ".find(c))
@@ -744,7 +805,7 @@ Sivuilla ei ladata ulkopuolisia skriptejä tai fontteja. Kävijöinä on myös l
     hdr = "/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  Permissions-Policy: interest-cohort=()\n"
     if PREVIEW:
         hdr += "  X-Robots-Tag: noindex, nofollow\n"
-    hdr += "/fi/*/lomat.ics\n  Content-Type: text/calendar; charset=utf-8\n/fonts/*\n  Cache-Control: public, max-age=31536000, immutable\n"
+    hdr += "/fi/*/lomat.ics\n  Content-Type: text/calendar; charset=utf-8\n/sv/*/lov.ics\n  Content-Type: text/calendar; charset=utf-8\n/fonts/*\n  Cache-Control: public, max-age=31536000, immutable\n"
     (out / "_headers").write_text(hdr)
     (out / "404.html").write_text(page("Sivua ei löytynyt | Koululomat", "Sivua ei löytynyt.",
                                        f"<h1>Hups, tätä sivua ei löytynyt</h1>{datalist}<section class=\"box\"><p>Kirjoita kuntasi nimi ylähakuun tai palaa <a href=\"/\">etusivulle</a>.</p></section>", "/404"))

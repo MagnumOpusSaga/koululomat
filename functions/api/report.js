@@ -12,6 +12,13 @@ export async function onRequestPost({ request, env }) {
     .bind(municipality, message, src || null).run();
   // 24 kk säilytys
   if (Math.random() < 0.01) await env.DB.prepare("DELETE FROM report WHERE created_at < datetime('now','-24 months')").run();
-  const back = new URL(request.headers.get("Referer") || "/", request.url);
-  return new Response(`<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><p style="font:18px system-ui;max-width:600px;margin:40px auto">Kiitos! Ilmoitus tallennettu – luemme lähteen ja tarkistamme tiedon. <a href="${back.pathname}">Takaisin</a></p>`, { headers: { "content-type": "text/html; charset=utf-8" } });
+  const sv = f.get("lang") === "sv";
+  let back = String(f.get("back") || "/");
+  if (!/^\/(fi|sv)\/[a-z0-9-]+\/$/.test(back)) back = sv ? "/sv/" : "/";
+  const msg = sv ? ["Tack!", "Meddelandet har sparats – vi läser källan och kontrollerar uppgiften.", "Tillbaka"]
+                 : ["Kiitos!", "Ilmoitus tallennettu – luemme lähteen ja tarkistamme tiedon.", "Takaisin"];
+  return new Response(`<!doctype html><html lang="${sv ? "sv" : "fi"}"><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>${msg[0]} | Koululomat</title><meta name="robots" content="noindex">` +
+    `<body style="margin:0;background:#FFF6E5;color:#2A1B0F;font:18px/1.5 Nunito,system-ui,sans-serif"><main style="max-width:560px;margin:60px auto;padding:28px;background:#fff;border-radius:28px;box-shadow:0 6px 0 #E8D9C4">` +
+    `<h1 style="margin:0 0 8px;font-weight:900">${msg[0]}</h1><p>${msg[1]}</p><p><a href="${back}" style="display:inline-block;background:#2A1B0F;color:#fff;padding:12px 22px;border-radius:99px;text-decoration:none;font-weight:900">${msg[2]}</a></p></main></body></html>`,
+    { headers: { "content-type": "text/html; charset=utf-8" } });
 }

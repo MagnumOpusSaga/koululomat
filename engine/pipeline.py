@@ -13,7 +13,7 @@ from .checks import confidence, plausibility, run_checks
 from .discover import discover
 from .extract_fi import extract
 from . import ai_reader
-from .discover import CONTENT_KW, SHARE_RX, URL_HIT
+from .discover import AGGREGATOR_RX, CONTENT_KW, NONSCHOOL_RX, SHARE_RX, URL_HIT
 
 AI_MAX_PER_MUN = 4
 AI_EXTRA_STRONG = 3  # lisäkutsut vahvoille ehdokkaille (URL kertoo työ-/loma-ajoista), ettei roskasivu vie kiintiötä
@@ -90,6 +90,12 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
             dd = Path("out_all/dump") / mun["id"]
             dd.mkdir(parents=True, exist_ok=True)
             (dd / f"{i:02d}.txt").write_text(f"URL: {doc['url']}\nFLAGS: {doc.get('flags')}\n\n" + doc["text"][:20000], encoding="utf-8")
+        if AGGREGATOR_RX.search(doc["url"]) or AGGREGATOR_RX.search(url):
+            sources.append({"url": doc["url"], "skipped": "kooste, ei kunnan oma lähde"})
+            continue
+        if NONSCHOOL_RX.search(doc["url"]) or NONSCHOOL_RX.search(doc.get("title") or ""):
+            sources.append({"url": doc["url"], "skipped": "opisto/harrastus"})
+            continue
         if not about_this_municipality(doc, mun, disc["home"]):
             sources.append({"url": url, "skipped": "toinen kunta"})
             continue

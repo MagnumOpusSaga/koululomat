@@ -22,6 +22,11 @@ SKIP = re.compile(r"\.(jpg|jpeg|png|gif|svg|css|js|zip|mp4|mp3|ics|xml)(\?|$)|/(
 CONTENT_KW = re.compile(r"syysloma|joululoma|talviloma|hiihtoloma|höstlov|jullov|sportlov|"
                         r"syyslukukau|kevätlukukau|hösttermin|vårtermin", re.I)
 
+# koosteet ja muut kuin kunnan omat lähteet: ei koskaan lähteeksi (sääntö: data aina kunnan omasta lähteestä)
+AGGREGATOR_RX = re.compile(r"(^|[/.])(oph\.fi|pyhapaivat\.fi|calendar\.center|koululomat\.fi|timeanddate\.|kalenterit?\.fi|almanakka\.|"
+                           r"lomakalenteri\.fi|loma-ajat\.fi|yle\.fi|hs\.fi|iltalehti\.fi|is\.fi|mtvuutiset\.fi|wikipedia\.org|facebook\.com|instagram\.com)", re.I)
+# kansalais-/työväenopistot ja harrastukset: omat lukukaudet, eivät koulujen lomat
+NONSCHOOL_RX = re.compile(r"kansalaisopisto|tyovaenopisto|työväenopisto|-opisto/|/opisto|opinto-?ohjelma|kurssiohjelma|medborgarinstitut|arbis", re.I)
 SHARE_RX = re.compile(r"facebook\.com/(share|sharer)|twitter\.com/intent|x\.com/intent|linkedin\.com/share|api\.whatsapp\.com|mailto:|/feedback/?$|/formular/?$|/anmalan", re.I)
 DOMAIN_OVERRIDES = {"091": "https://www.hel.fi/fi", "092": "https://www.vantaa.fi/fi",
                     "049": "https://www.espoo.fi/fi", "853": "https://www.turku.fi",
@@ -183,5 +188,5 @@ def discover(mun: dict, max_pages=45, log=None) -> dict:
                 add(u, 6, "haku")
         res["searched"] = bool(os.environ.get("BRAVE_API_KEY"))
     res["pages_crawled"] = len(seen)
-    res["candidates"] = sorted(([u, s, w] for u, (s, w) in scored.items() if not SHARE_RX.search(u)), key=lambda x: -x[1])
+    res["candidates"] = sorted(([u, s, w] for u, (s, w) in scored.items() if not SHARE_RX.search(u) and not AGGREGATOR_RX.search(u) and not NONSCHOOL_RX.search(u)), key=lambda x: -x[1])
     return res

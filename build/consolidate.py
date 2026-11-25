@@ -30,6 +30,39 @@ def _extra(f):
     return {k: v for k, v in e.items() if v}
 
 
+def _sane(f):
+    """Kieliversiolle tiukempi: lomat vähintään 3 (syys/talvi) tai 5 (joulu) päivää, muuten luettu väärin (Turku sv)."""
+    from datetime import date as _d
+    ln = lambda k: (_d.fromisoformat(f[k]["end"]) - _d.fromisoformat(f[k]["start"])).days + 1
+    return ln("syys") >= 3 and ln("talvi") >= 3 and ln("joulu") >= 5
+
+
+def _accept(v, m, y, review, now, strict=False):
+    if v and v["checks"].get("plausibility"):
+        issues = v["checks"]["plausibility"]
+        if review is not None:
+            review.append({"id": m["id"], "name": m["fi"], "year": y, "issues": issues, "source": v.get("primary")})
+        if len(issues) == 1 and SOFT.match(issues[0]):
+            # lievä poikkeama (esim. päättyy torstaina): näytetään, mutta enintään "yksi lähde"
+            if v["confidence"] == "varmistettu":
+                v = dict(v, confidence="yksi_lähde")
+        else:
+            return None  # selvä järkevyyspoikkeama: ei näytetä luettuna, vaan arviona kunnes tarkistettu
+    if v and v["confidence"] == "varmistettu" and any(str(x.get("quote", "")).startswith("[vaihdettu]") for x in v["fields"].values() if isinstance(x, dict)):
+        v = dict(v, confidence="yksi_lähde")  # syys/talvi vaihdettu ruudukon palstoista -> ei koskaan varmistettu
+    if not (v and all(f in v["fields"] for f in ("syys", "joulu", "talvi"))):
+        return None
+    f = v["fields"]
+    if strict and not _sane(f):
+        return None
+    return {"status": v["status"], "confidence": v["confidence"],
+            "days_calc": v["checks"]["calc_days"], "days_expected": v["checks"]["expected_days"],
+            "source": v["primary"], "updated": now,
+            "fields": {k: {"start": f[k]["start"], "end": f[k]["end"], "quote": f[k].get("quote", "")[:160],
+                           "sources": f[k].get("sources", [])} for k in FIELDS if k in f},
+            "extra": _extra(f)}
+
+
 def main(dirs):
     muns = json.loads((ROOT / "fi_municipalities.json").read_text())
     res = {}
@@ -45,28 +78,15 @@ def main(dirs):
         rec = {"id": m["id"], "name": m["fi"], "name_sv": m.get("sv"), "region": m["region"],
                "pop": m["pop"], "home": (r or {}).get("home"), "years": {}}
         for y in YEARS:
-            v = ((r or {}).get("years") or {}).get(y)
-            if v and v["checks"].get("plausibility"):
-                issues = v["checks"]["plausibility"]
-                review.append({"id": m["id"], "name": m["fi"], "year": y, "issues": issues, "source": v.get("primary")})
-                if len(issues) == 1 and SOFT.match(issues[0]):
-                    # lievä poikkeama (esim. päättyy torstaina): näytetään, mutta enintään "yksi lähde"
-                    if v["confidence"] == "varmistettu":
-                        v = dict(v, confidence="yksi_lähde")
-                else:
-                    v = None  # selvä järkevyyspoikkeama: ei näytetä luettuna, vaan arviona kunnes tarkistettu
-            if v and v["confidence"] == "varmistettu" and any(str(x.get("quote", "")).startswith("[vaihdettu]") for x in v["fields"].values() if isinstance(x, dict)):
-                v = dict(v, confidence="yksi_lähde")  # syys/talvi vaihdettu ruudukon palstoista -> ei koskaan varmistettu
-            if v and all(f in v["fields"] for f in ("syys", "joulu", "talvi")):
-                f = v["fields"]
-                rec["years"][y] = {
-                    "status": v["status"], "confidence": v["confidence"],
-                    "days_calc": v["checks"]["calc_days"], "days_expected": v["checks"]["expected_days"],
-                    "source": v["primary"], "updated": now,
-                    "fields": {k: {"start": f[k]["start"], "end": f[k]["end"], "quote": f[k].get("quote", "")[:160],
-                                   "sources": f[k].get("sources", [])} for k in FIELDS if k in f},
-                    "extra": _extra(f),
-                }
+            yr = _accept(((r or {}).get("years") or {}).get(y), m, y, review, now)
+            if yr:
+                rec["years"][y] = yr
+        # kaksikieliset: toisen kieliversion päivät (esim. Vantaan ruotsinkieliset koulut: höstlov 14.–16.10.)
+        rec["variant"] = (r or {}).get("variant") or "fi"
+        for lg, ys in ((r or {}).get("variants") or {}).items():
+            alt = {y: a for y in YEARS if (a := _accept((ys or {}).get(y), m, y, None, now, strict=True))}
+            if alt:
+                rec.setdefault("alt", {})[lg] = alt
         forms = (r or {}).get("forms") or {}
         if forms:
             rec["forms"] = {F: {y: {k: {kk: x[kk] for kk in ("start", "end", "quote", "sources", "conflict") if kk in x}

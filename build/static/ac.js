@@ -1,6 +1,8 @@
 /* Koululomat: kuntahaun ennakoivat ehdotukset. Ei evästeitä, ei seurantaa, ei ulkoisia kutsuja. */
 (function () {
   var D = null, P = null, SV = document.documentElement.lang === "sv";
+  var HFI = { syys: "Syysloma", joulu: "Joululoma", talvi: "Hiihtoloma", kesa: "Kesäloma" },
+      HSV = { syys: "Höstlov", joulu: "Jullov", talvi: "Sportlov", kesa: "Sommarlov" };
   function n(v) {
     return (v || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
       .replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -11,6 +13,17 @@
       return D;
     });
     return P;
+  }
+  function ed(a, b) {  // Damerau–Levenshtein (vierekkäinen vaihto = 1)
+    var m = a.length, n2 = b.length, d = [], i, j;
+    for (i = 0; i <= m; i++) { d[i] = [i]; }
+    for (j = 0; j <= n2; j++) d[0][j] = j;
+    for (i = 1; i <= m; i++) for (j = 1; j <= n2; j++) {
+      var c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+    return d[m][n2];
   }
   function nights(ds) {
     var t = new Date(ds + "T00:00:00"), d = new Date(); d.setHours(0, 0, 0, 0);
@@ -47,6 +60,14 @@
         else if (x.k.indexOf(q) > 0 || (x.k2 && x.k2.indexOf(q) > 0)) inc.push(x);
       });
       items = st.concat(inc).slice(0, 6);
+      if (!items.length && q.length >= 3) {  // kirjoitusvirhe ("helsnki", "jyvaskla"): lähimmät nimet
+        var lim = q.length <= 5 ? 1 : 2;
+        items = D.map(function (x) {
+          var dd = Math.min(ed(q, x.k.slice(0, q.length)), ed(q, x.k.slice(0, q.length + 1)), ed(q, x.k), x.k2 ? ed(q, x.k2.slice(0, q.length)) : 99);
+          return [dd, x];
+        }).filter(function (p) { return p[0] <= lim; }).sort(function (p, r) { return p[0] - r[0] || p[1].k.length - r[1].k.length; })
+          .slice(0, 6).map(function (p) { return p[1]; });
+      }
       if (SV) {  // svenska: kommuner med svensk sida först
         items = st.concat(inc).sort(function (p, q) { return (q.ss ? 1 : 0) - (p.ss ? 1 : 0); }).slice(0, 6);
       }
@@ -56,11 +77,12 @@
       }
       L.innerHTML = items.map(function (x, j) {
         var sub = SV && !x.ss ? "på finska" : x.r;
-        if (x.h && x.d && !(SV && !x.ss)) {
-          var m = nights(x.d);
-          if (SV && x.hs) { if (m > 0) sub = "Till " + x.hs + " " + m + " " + (m === 1 ? "natt" : "nätter"); else if (m === 0) sub = "Lovet börjar i dag!"; }
-          else if (m > 0) sub += " · " + x.h + "an " + m + " " + (m === 1 ? "yö" : "yötä");
-          else if (m === 0) sub += " · " + x.h + " alkaa tänään!";
+        // seuraava loma lasketaan tästä päivästä (sivu voi olla rakennettu päiviä sitten)
+        var nx = (x.u || []).filter(function (h) { return nights(h[2]) >= 0; })[0];
+        if (nx && !(SV && !x.ss)) {
+          var m = nights(nx[1]), hn = (SV ? HSV : HFI)[nx[0]];
+          if (SV) sub = m > 0 ? "Till " + hn.toLowerCase() + "et " + m + " " + (m === 1 ? "natt" : "nätter") : hn + " nu!";
+          else sub += " · " + (m > 0 ? hn.toLowerCase() + "an " + m + " " + (m === 1 ? "yö" : "yötä") : m === 0 ? hn.toLowerCase() + " alkaa tänään!" : hn.toLowerCase() + " nyt!");
         }
         var p1 = SV && x.sv ? x.sv : x.n, p2 = SV && x.sv ? x.n : x.sv;
         return '<a role="option" id="' + L.id + "-" + j + '" class="aco' + (j === a ? " on" : "") + '" href="' + url(x) + '">' +

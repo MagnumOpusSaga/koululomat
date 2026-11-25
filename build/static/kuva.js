@@ -64,6 +64,7 @@
     var lbl = bi.querySelector("span"), o = lbl.textContent; lbl.textContent = S.busy;
     Promise.all([fetch("/lomat.json").then(function (x) { return x.json(); }), document.fonts ? document.fonts.ready : null]).then(function (a) {
       var rec = a[0][slug]; if (!rec) { lbl.textContent = o; return; }
+      if (bi.getAttribute("data-l") === "sv" && rec.sv) rec = { n: rec.n, y: rec.sv };  // svenskspråkiga skolornas lov
       draw(rec).toBlob(function (blob) {
         var fn = "koululomat-" + slug + ".png", file = null;
         try { file = new File([blob], fn, { type: "image/png" }); } catch (e) {}

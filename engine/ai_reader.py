@@ -99,7 +99,8 @@ def to_records(ai: dict) -> dict:
     if not ai or ai.get("error") or ai.get("kunta_oikein") is False:
         return out
     for y, v in (ai.get("lukuvuodet") or {}).items():
-        if not isinstance(v, dict) or v.get("koulumuoto") not in (None, "perus", "kaikki"):
+        km = str(v.get("koulumuoto") or "").lower() if isinstance(v, dict) else "x"
+        if not isinstance(v, dict) or (km and "perus" not in km and "kaikki" not in km and km != "none"):
             continue
         q = v.get("lainaukset") or {}
         r = {}

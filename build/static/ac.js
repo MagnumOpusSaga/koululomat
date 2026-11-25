@@ -26,9 +26,17 @@
   }
   document.querySelectorAll("form.search").forEach(function (f) {
     var i = f.querySelector("input"), L = f.querySelector(".acl"), items = [], a = -1;
-    var pre = f.getAttribute("data-prefix");
+    var pre = f.getAttribute("data-prefix"), pickMode = f.hasAttribute("data-pick");
     if (!i || !L) return;
     function url(x) { return pre && x.t ? pre + x.s + "/" : "/fi/" + x.s + "/"; }
+    function pick(x) {  // vertailusivu: valinta täyttää kentän eikä siirry sivulle
+      i.value = x.n; close();
+      f.dispatchEvent(new CustomEvent("kuntapick", { detail: x, bubbles: true }));
+    }
+    if (pickMode) L.addEventListener("click", function (e) {
+      var o = e.target.closest(".aco"); if (!o) return;
+      e.preventDefault(); var j = parseInt(o.id.split("-").pop(), 10); if (items[j]) pick(items[j]);
+    });
     function close() { L.hidden = true; i.setAttribute("aria-expanded", "false"); i.removeAttribute("aria-activedescendant"); a = -1; }
     function render() {
       var q = n(i.value);
@@ -72,7 +80,7 @@
         if (!q) return;
         render();
         var x = (a >= 0 && items[a]) || D.filter(function (y) { return y.k === q || y.k2 === q; })[0] || items[0];
-        if (x) location.href = url(x);
+        if (x) { if (pickMode) pick(x); else location.href = url(x); }
       });
     });
     document.addEventListener("click", function (e) { if (!f.contains(e.target)) close(); });

@@ -122,6 +122,7 @@ a.card{text-decoration:none;color:#2A1B0F}a.card:hover{transform:translateY(-2px
 .wkb{width:62px;height:62px;border-radius:18px;background:var(--bg);color:var(--c);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;line-height:1}
 .wkb small{font-size:12px;font-weight:800}.wkb b{font-size:24px;font-weight:900}
 .az{scroll-margin-top:16px}
+.cmpr{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #F2E6D3;font-size:16px}.cmpr span{font-weight:700;color:#5F4B3A}.cmpr b{text-align:right}
 .sr{position:absolute;left:-9999px}
 h1{font-size:30px;line-height:1.15;font-weight:900;margin:8px 0 16px}
 h2{font-size:22px;font-weight:900;margin:0 0 10px}
@@ -164,8 +165,8 @@ footer.bot{padding:26px 0 40px;font-size:14px;color:#6B5847;text-align:center}
 
 
 
-def search_form(fid, placeholder="Mikä on sinun kuntasi?", big=False, prefix=None, main=False):
-    pre = f' data-prefix="{prefix}"' if prefix else ""
+def search_form(fid, placeholder="Mikä on sinun kuntasi?", big=False, prefix=None, main=False, pick=None):
+    pre = (f' data-prefix="{prefix}"' if prefix else "") + (f' data-pick="{pick}"' if pick else "")
     return (f'<form class="search{" lg" if big else ""}" action="/haku/" role="search"{pre}{" data-main" if main else ""}>'
             f'<label class="sr" for="{fid}">Hae kuntaa</label><div class="ac"><input id="{fid}" name="q" type="search" placeholder="{placeholder}" '
             f'role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="{fid}-l" autocomplete="off" autocapitalize="words" spellcheck="false">'
@@ -400,7 +401,7 @@ def build(data_path, out_dir):
         cmp_url = HPAGE[nk][0] if nk else "/fi/hiihtoloma-2027/"
         body = (f'<h1>{rec["name"]}{sv}: koulujen lomat</h1>{top}'
                 f'<div class="btns"><a class="btn" href="/fi/{s}/lomat.ics">Lisää lomat kalenteriin</a>'
-                f'<a class="btn alt" href="{cmp_url}">Vertaa muihin kuntiin</a></div>'
+                f'<a class="btn alt" href="/vertaa/?a={s}">Vertaa toiseen kuntaan</a></div>'
                 f'{adult_table(rec)}{REPORT_FORM.format(id=rec["id"])}{COUNTDOWN_JS}')
         tal = (rec["years"].get(y1) or {}).get("fields", {}).get("talvi")
         desc = (f"{rec['name']}: syysloma, joululoma ja hiihtoloma" + (f" (vk {week(tal['start'])})" if tal else "")
@@ -427,6 +428,26 @@ def build(data_path, out_dir):
                                                      f"{rec['name']}: hiihtoloma 2027 on {fmt(tal['start'], tal['end'])} (viikko {week(tal['start'])}). Lähtölaskuri ja lähde.",
                                                      hb, f"/fi/hiihtoloma-2027/{s}/", theme="talvi"))
             urls.append(f"/fi/hiihtoloma-2027/{s}/")
+    lomat = {}
+    for rec in data:
+        yy = {}
+        for y, v in rec["years"].items():
+            f = v["fields"]
+            e = {"c": v["confidence"]}
+            for k in ("syys", "joulu", "talvi"):
+                if k in f:
+                    e[k] = [f[k]["start"], f[k]["end"]]
+            if "end" in f:
+                e["kesa"] = f["end"]["start"]
+            yy[y] = e
+        lomat[slug(rec["name"])] = {"n": rec["name"], "y": yy}
+    (out / "lomat.json").write_text(json.dumps(lomat, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    write("/vertaa/", page("Vertaa kahden kunnan koululomia – esim. oma kunta ja mummola | Koululomat",
+                           "Vertaa kahden kunnan syys-, joulu-, hiihto- ja kesälomia. Näet heti, onko lomaa yhtä aikaa.",
+                           f'<h1>Vertaa kahta kuntaa</h1><p class="sub">Esimerkiksi oma kunta ja mummola tai serkkujen kunta: onko lomaa yhtä aikaa?</p>'
+                           f'<div class="layout" style="gap:12px">{search_form("qa", "Ensimmäinen kunta", big=True, pick="a")}{search_form("qb", "Toinen kunta", big=True, pick="b")}</div>'
+                           f'<div id="cmp" data-year="2026-2027"></div><script src="/vertaa.js" defer></script>', "/vertaa/", top_search=False))
+    urls.append("/vertaa/")
     (out / "kunnat.json").write_text(json.dumps(sorted(ac, key=lambda x: x["n"]), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     # lomasivut (väriprofiili loman mukaan)
@@ -515,6 +536,7 @@ def build(data_path, out_dir):
             f'{search_form("q2", big=True)}'
             f'<p class="trust"><span class="b ok">✓ Kunnan oma lähde</span>{n_ok}/{len(data)} kuntaa</p>'
             f'<h2>Tai katso loma kerrallaan</h2><div class="tiles">{tiles}</div>'
+            f'<div class="btns"><a class="btn alt" href="/vertaa/">Vertaa kahta kuntaa – esim. oma kunta ja mummola</a></div>'
             f'<h2 style="margin-top:30px">Ajankohtaista</h2><div class="acards">{acards}</div>'
             f'<h2 style="margin-top:30px">Kaikki kunnat</h2><div class="letters">{letters}</div>')
     write("/", page("Koulujen lomat kunnittain 2026–2027 – syysloma, joululoma, hiihtoloma | Koululomat",

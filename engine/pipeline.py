@@ -127,8 +127,11 @@ def process(mun: dict, years=("2026-2027", "2027-2028"), country="fi", max_docs=
             # sääntölukijan täydellinen ja järkevä tulos voittaa (Kerava: tekoäly palautti vain alun ja lopun)
             if ai_ok and (incomplete or implausible or (ai_clean and doc["flags"].get("grid") and not rules_good)):
                 res, reader = ai_res, "ai"
+            lv = (ai or {}).get("lukuvuodet") or {}
             ai_log.append({"url": doc["url"], "ok": ai_ok, "clean": ai_clean, "images": len(imgs), "used": reader == "ai",
-                           "error": (ai or {}).get("error")})
+                           "error": (ai or {}).get("error"), "kunta_oikein": (ai or {}).get("kunta_oikein"),
+                           "seen": {y: [k for k in ("koulumuoto", "syysloma", "joululoma", "talviloma") if isinstance(v, dict) and v.get(k)]
+                                    + ([str(v.get("koulumuoto"))] if isinstance(v, dict) else []) for y, v in lv.items()}})
         src = {"url": doc["url"], "kind": kind, "format": doc["format"], "flags": doc["flags"],
                "hash": h[:16], "change": change, "variant": variant, "reader": reader, "years": sorted(res.keys())}
         sources.append(src)

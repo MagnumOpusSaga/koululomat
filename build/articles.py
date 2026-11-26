@@ -78,7 +78,7 @@ def _faq(items):
 
 def _schema(title, desc, path, base, today, faq, lang="fi"):
     return [{"@context": "https://schema.org", "@type": "Article", "headline": title, "description": desc,
-             "datePublished": "2026-11-24", "dateModified": today.isoformat(), "inLanguage": lang, "mainEntityOfPage": base + path,
+             "datePublished": "2026-11-24", "inLanguage": lang, "mainEntityOfPage": base + path,
              "author": {"@type": "Organization", "name": "Koululomat.fi"},
              "publisher": {"@type": "Organization", "name": "BR Entertainment", "logo": {"@type": "ImageObject", "url": base + "/icon-512.png"}}},
             {"@context": "https://schema.org", "@type": "FAQPage",
@@ -88,10 +88,11 @@ def _schema(title, desc, path, base, today, faq, lang="fi"):
 def build_articles(data, today, write, h):
     """h: apufunktiot build_site.py:stä (page, search_form, icon, share_btn, HOL, BASE). Palauttaa artikkelien tiedot linkitystä varten."""
     page, search_form, icon, share_btn, HOL, BASE = h["page"], h["search_form"], h["icon"], h["share_btn"], h["HOL"], h["BASE"]
+    lists, G = h.get("lists", {}), h["G"]
     ok = _ok(data)
     n_src = len(ok)
     upd = f"{today.day}.{today.month}.{today.year}"
-    meta = (f'<div class="meta"><span>Päivitetty {upd}</span><span>·</span><span>Lukuaika 3 min</span><span>·</span>'
+    meta = (f'<div class="meta"><span>Tarkistettu {upd}</span><span>·</span><span>Lukuaika 3 min</span><span>·</span>'
             f'<span class="b ok">Lähteenä {n_src} kunnan omat päätökset</span></div>')
     out = []
 
@@ -114,7 +115,7 @@ def build_articles(data, today, write, h):
     for w in sorted(weeks):
         mon = date.fromisocalendar(2027, w, 1)
         fri = mon + timedelta(4)
-        rows += (f'<a class="row" href="/fi/hiihtoloma-2027/"><div class="chip"><small>vk</small><b>{w}</b></div>'
+        rows += (f'<a class="row" href="#vk-{w}"><div class="chip"><small>vk</small><b>{w}</b></div>'
                  f'<div><b class="t">{mon.day}.{mon.month}.–{fri.day}.{fri.month}.2027</b><span>{len(weeks[w])} kuntaa · esim. {_examples(weeks[w])}</span></div></a>')
     grid, mixed = _grid(by_reg, lambda w: WEEK_SHADE.get(w, WEEK_SHADE[11]), lambda w: f"vk {w}")
     legend = "".join(f'<span><i style="background:{WEEK_SHADE[w][0]}"></i>vk {w}</span>' for w in main)
@@ -131,26 +132,31 @@ def build_articles(data, today, write, h):
             (f"{n28} kuntaa on jo päättänyt seuraavan lukuvuoden: " + ", ".join(f"viikolla {w} {c28[w]} kuntaa" for w in sorted(c28)) + ". Lista täydentyy talven aikana, kun kunnat tekevät päätöksiä.")
             if n28 else "Kunnat päättävät seuraavan lukuvuoden yleensä loka–helmikuussa. Päivitämme tiedot heti, kun päätökset julkaistaan."),
            ]
-    body = (f'<article class="art" style="--c2:#1D4F91"><div class="kick">Artikkeli · Hiihtoloma</div>'
+    uni = [reg for reg in REGIONS if len(by_reg.get(reg, {})) == 1]
+    mix = [(reg, by_reg[reg]) for reg in REGIONS if len(by_reg.get(reg, {})) > 1]
+    same_txt = (f"{len(uni)} maakunnassa {len([x for x in REGIONS if by_reg.get(x)])}:stä kaikilla kunnilla on sama hiihtolomaviikko. "
+                + " ".join(f"{reg}: " + ", ".join(f"vk {w} {n} kuntaa" for w, n in sorted(c.items())) + "." for reg, c in mix))
+    body = (f'<article class="art" style="--c2:#1D4F91"><div class="kick">Hiihtoloma</div>'
             f'<h1>Hiihtoloma 2027: milloin on hiihtoloma?</h1>{meta}'
             f'<section class="ans"><div class="lbl">{icon("talvi", 20, "currentColor")} Lyhyt vastaus</div><p class="short">{short}</p>{rows}</section>'
             f'<h2 style="font-size:19px;margin:22px 0 8px">Mikä viikko on sinun kunnassasi?</h2>'
-            f'{search_form("q2", "Kirjoita kuntasi", big=True, prefix="/fi/hiihtoloma-2027/")}'
+            f'{search_form("q2", "Kirjoita kuntasi", big=True)}'
             f'<h2>Hiihtolomaviikot maakunnittain</h2>'
             f'<p>Hiihtoloma alkaa etelästä ja siirtyy pohjoiseen. {_join(south[:4], "ja")} lomailevat viikolla 8, keskinen Suomi viikolla 9 ja '
             f'{_join(north[:5], "ja")} viikolla 10.</p>{grid}<div class="leg">{legend}</div>{mixed_txt}'
-            f'<h2>Miksi hiihtolomat ovat eri viikoilla?</h2>'
-            f'<p>Hiihtolomat porrastetaan, jotta hiihtokeskukset, junat ja mökit eivät ruuhkaudu yhdellä viikolla. '
-            f'Jokainen kunta päättää viikon itse, mutta naapurikunnat valitsevat yleensä saman.</p>'
+            f'<h2>Onko naapurikunnalla sama viikko?</h2><p>{same_txt}</p>'
+            f'<h2 id="kunnat">Kaikki kunnat viikoittain</h2><div class="wk">{lists.get("talvi", "")}</div>'
             f'<h2>Usein kysyttyä</h2>{_faq(faq)}'
-            f'<div class="btns"><a class="btn" href="/fi/hiihtoloma-2027/">Kaikki kunnat viikoittain</a>'
+            f'<div class="btns"><a class="btn" href="#kunnat">Kaikki kunnat viikoittain</a>'
             f'{share_btn("Koululomat", text="Hiihtoloma 2027 – katso oman kuntasi viikko:")}</div>'
             f'<p class="src">Lähteet: {n_src} kunnan omat päätökset koulujen työ- ja loma-ajoista (perusopetus), tarkistettu {upd}. '
             f'Kunnat, joiden päätöstä ei vielä löytynyt, eivät ole mukana luvuissa. <a href="/tietoa/">Miten tiedot kerätään?</a></p></article>')
     title = "Hiihtoloma 2027: milloin on hiihtoloma? Viikot kunnittain ja maakunnittain"
     desc = f"Hiihtoloma 2027 on kunnasta riippuen viikolla {_join(main)}. Katso oman kuntasi viikko – tiedot {n_src} kunnan omista päätöksistä."
-    path = "/artikkelit/hiihtoloma-2027/"
-    write(path, page(f"{title} | Koululomat", desc, body, path, _schema(title, desc, path, BASE, today, faq), theme="talvi", top_search=False))
+    path = "/fi/hiihtoloma-2027/"
+    nk = sum(len(v) for v in weeks.values())
+    write(path, page(f"{title} | Koululomat", desc, body, path, _schema(title, desc, path, BASE, today, faq), theme="talvi", top_search=False,
+                     g=("loma", *G.count_ok(nk, G.MIN_KUNNAT_LOMA, "kunnan omat päivät")), sig=sorted((r["id"], w) for w, rs in weeks.items() for r in rs)))
     out.append({"path": path, "title": "Hiihtoloma 2027: milloin on hiihtoloma?", "sub": f"Viikot {_join(main)} – maakunnittain", "k": "talvi"})
 
     # ---------------- Joululoma 2026 ----------------
@@ -175,7 +181,7 @@ def build_articles(data, today, write, h):
     short = f"Koulujen joululoma alkaa kunnasta riippuen {day_txt}2026."
     if back:
         short += f" Useimmissa kunnissa ({back_n}/{sum(ends.values())}) koulu jatkuu {FI_WD[back.weekday()]} {back.day}.{back.month}.{back.year}."
-    rows = "".join(f'<a class="row" href="/fi/joululoma/"><div class="chip"><small>{["ma", "ti", "ke", "to", "pe", "la", "su"][s.weekday()]}</small><b style="font-size:16px">{s.day}.{s.month}.</b></div>'
+    rows = "".join(f'<a class="row" href="#d-{s.month}-{s.day}"><div class="chip"><small>{["ma", "ti", "ke", "to", "pe", "la", "su"][s.weekday()]}</small><b style="font-size:16px">{s.day}.{s.month}.</b></div>'
                    f'<div><b class="t">Alkaa {FI_WD[s.weekday()]} {s.day}.{s.month}.</b><span>{len(starts[s])} kuntaa · esim. {_examples(starts[s])}</span></div></a>' for s in sd)
     grid, mixed = _grid(by_reg, lambda s: shade[s], lambda s: f"{s.day}.{s.month}.")
     legend = "".join(f'<span><i style="background:{shade[s][0]}"></i>alkaa {s.day}.{s.month}.</span>' for s in sd if len(starts[s]) >= 3)
@@ -185,20 +191,23 @@ def build_articles(data, today, write, h):
            ("Miksi joululoma alkaa eri päivinä?", "Kunta päättää loma-ajat itse. Lukuvuodessa on oltava laissa säädetty määrä koulupäiviä, joten kunnat sijoittavat päiviä eri tavoin syys- ja kevätlukukaudelle."),
            ("Onko esikoululla sama joululoma?", "Yleensä kyllä, mutta esiopetuksen päivät voivat poiketa. Varhaiskasvatuksella (päiväkoti) ei ole koulujen lomia."),
            ("Mistä näen oman kuntani päivät?", "Kirjoita kuntasi nimi hakuun. Kuntasivulla on joululoman lisäksi syys-, hiihto- ja kesäloma, lähde ja lähtölaskuri.")]
-    body = (f'<article class="art" style="--c2:#0E5A2B"><div class="kick">Artikkeli · Joululoma</div>'
+    body = (f'<article class="art" style="--c2:#0E5A2B"><div class="kick">Joululoma</div>'
             f'<h1>Joululoma 2026: milloin koulujen joululoma alkaa?</h1>{meta}'
             f'<section class="ans"><div class="lbl">{icon("joulu", 20, "currentColor")} Lyhyt vastaus</div><p class="short">{short}</p>{rows}</section>'
             f'<h2 style="font-size:19px;margin:22px 0 8px">Milloin joululoma alkaa sinun kunnassasi?</h2>{search_form("q2", "Kirjoita kuntasi", big=True)}'
             f'<h2>Joululoman alku maakunnittain</h2><p>Ruudussa on maakunnan yleisin alkupäivä.</p>{grid}<div class="leg">{legend}</div>{mixed_txt}'
             f'<h2>Milloin koulu alkaa joululoman jälkeen?</h2><ul>{back_rows}</ul>'
+            f'<h2 id="kunnat">Kaikki kunnat alkupäivittäin</h2><div class="wk">{lists.get("joulu", "")}</div>'
             f'<h2>Usein kysyttyä</h2>{_faq(faq)}'
-            f'<div class="btns"><a class="btn" href="/fi/joululoma/">Kaikki kunnat alkupäivittäin</a></div>'
+            f'<div class="btns"><a class="btn" href="/artikkelit/koulu-loppuu-ennen-joulua-2026/">Viimeinen koulupäivä ennen joulua</a></div>'
             f'<p class="src">Lähteet: {n_src} kunnan omat päätökset koulujen työ- ja loma-ajoista (perusopetus), tarkistettu {upd}. '
             f'Kunnat, joiden päätöstä ei vielä löytynyt, eivät ole mukana luvuissa. <a href="/tietoa/">Miten tiedot kerätään?</a></p></article>')
     title = "Joululoma 2026: milloin koulujen joululoma alkaa ja loppuu?"
     desc = f"Koulujen joululoma 2026 alkaa kunnasta riippuen {day_txt} Katso oman kuntasi päivät – tiedot {n_src} kunnan omista päätöksistä."
-    path = "/artikkelit/joululoma-2026/"
-    write(path, page(f"{title} | Koululomat", desc, body, path, _schema(title, desc, path, BASE, today, faq), theme="joulu", top_search=False))
+    path = "/fi/joululoma/"
+    nk = sum(len(v) for v in starts.values())
+    write(path, page(f"{title} | Koululomat", desc, body, path, _schema(title, desc, path, BASE, today, faq), theme="joulu", top_search=False,
+                     g=("loma", *G.count_ok(nk, G.MIN_KUNNAT_LOMA, "kunnan omat päivät")), sig=sorted((r["id"], str(d)) for d, rs in starts.items() for r in rs)))
     out.append({"path": path, "title": "Joululoma 2026: milloin koulujen joululoma alkaa?", "sub": f"Alkaa {sd[0].day}.–{sd[-1].day}.{sd[-1].month}. – alueittain" if sd else "Alueittain", "k": "joulu"})
     # ---------------- Viimeinen koulupäivä ennen joulua 2026 ----------------
     last = defaultdict(list)
@@ -240,13 +249,16 @@ def build_articles(data, today, write, h):
                 f'<p>Syyslukukausi päättyy joulujuhlaan. Kunta päättää päivän itse: osa pitää joulujuhlan lauantaina 19.12., osa koulun viimeisenä arkipäivänä ennen lomaa. '
                 f'Joululoma alkaa seuraavana arkipäivänä.</p>'
                 f'<h2>Usein kysyttyä</h2>{_faq(faq)}'
-                f'<div class="btns"><a class="btn" href="/artikkelit/joululoma-2026/">Joululoma 2026 kunnittain</a></div>'
+                f'<div class="btns"><a class="btn" href="/fi/joululoma/">Joululoma 2026 kunnittain</a></div>'
                 f'<p class="src">Lähteet: {n_src} kunnan omat päätökset koulujen työ- ja loma-ajoista (perusopetus), tarkistettu {upd}. '
                 f'Viimeinen koulupäivä on luettu syyslukukauden päättymispäivästä; jos sitä ei ole ilmoitettu, se on päätelty joululoman alusta. '
                 f'<a href="/tietoa/">Miten tiedot kerätään?</a></p></article>')
         title = "Milloin koulu loppuu ennen joulua 2026? Joulujuhla ja viimeinen koulupäivä kunnittain"
         desc = f"Koulun viimeinen päivä ennen joulua 2026 on kunnasta riippuen {_join([f'{k.day}.{k.month}.' for k in known])} Katso oman kuntasi joulujuhlan päivä."
         path = "/artikkelit/koulu-loppuu-ennen-joulua-2026/"
-        write(path, page(f"{title} | Koululomat", desc, body, path, _schema(title, desc, path, BASE, today, faq), theme="joulu", top_search=False))
+        nk = sum(len(last[k]) for k in known)
+        write(path, page(f"{title} | Koululomat", desc, body, path, _schema(title, desc, path, BASE, today, faq), theme="joulu", top_search=False,
+                         g=("artikkeli", *G.count_ok(nk, G.MIN_KUNNAT_ART, "kunnan viimeinen koulupäivä lähteestä")),
+                         sig=sorted((r["id"], str(k)) for k in known for r in last[k])))
         out.insert(0, {"path": path, "title": "Milloin koulu loppuu ennen joulua 2026?", "sub": "Joulujuhla ja viimeinen koulupäivä kunnittain", "k": "joulu"})
     return out

@@ -11,12 +11,13 @@ import re
 import shutil
 import sys
 import unicodedata
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import articles
+import gate as G
 import sv_pages  # noqa: E402
 
 PREVIEW = os.environ.get("PREVIEW", "1") == "1"
@@ -43,6 +44,7 @@ THEME = {"brand": ("#E8741E", "#B4530F", "#fff", "#FFF6E5", "#FFE08A", "rgba(255
          "talvi": ("#1D6FB8", "#0F4A80", "#fff", "#EEF4FB", "#FFE08A", "rgba(255,255,255,.3)"),
          "kesa": ("#FFB627", "#C98A0B", "#2A1B0F", "#FFF8E1", "#2A1B0F", "rgba(42,27,15,.15)")}
 DARK = {"syys": "#8A2E08", "joulu": "#0E5A2B", "talvi": "#0F4A80", "kesa": "#7A4F00"}  # lomavärin tumma sävy tekstiin vaalealla pohjalla (≥ 7:1)
+WD_LONG = ["maanantaina", "tiistaina", "keskiviikkona", "torstaina", "perjantaina", "lauantaina", "sunnuntaina"]
 HPAGE = {"syys": ("/fi/syysloma/", "Syysloma 2026"), "joulu": ("/fi/joululoma/", "Joululoma 2026–2027"),
          "talvi": ("/fi/hiihtoloma-2027/", "Hiihtoloma 2027"), "kesa": ("/fi/kesaloma/", "Kesäloma 2027")}
 CONF = {"varmistettu": ("Varmistettu", "ok", "Kunnan oma lähde, ja koulupäivien laskenta täsmää lakiin."),
@@ -69,13 +71,13 @@ T = {"fi": {"wd": WD, "hol": {k: v["name"] for k, v in HOL.items()}, "week": "vi
             "adult": "Aikuisille: tarkat päivät", "rows": ["Koulu alkaa", "Syysloma", "Joululoma", "Talviloma (hiihtoloma)", "Koulu päättyy"],
             "perus": "Perusopetus", "tabs": ["Peruskoulu", "Esikoulu", "Lukio"], "tabl": "Koulumuoto", "full": ["Esiopetus", "Lukio"],
             "note": "Lomapäivät ovat arkipäiviä, viikonloput tulevat lisäksi. Yksittäisten koulujen päivät voivat poiketa.",
-            "src": "Lähteet", "upd": "Päivitetty", "calc": "koulupäiviä laskettu", "docd": "koulupäiviä kunnan ilmoituksen mukaan", "law": "laki",
+            "src": "Lähteet", "upd": "Tarkistettu", "calc": "koulupäiviä laskettu", "docd": "koulupäiviä kunnan ilmoituksen mukaan", "law": "laki",
             "noyear": "arvio – kunnan päätöstä ei vielä löytynyt, tarkista koululta",
             "frows": ["Lukukausi alkaa", "Syysloma", "Syyslukukausi päättyy", "Joululoma", "Kevätlukukausi alkaa", "Talviloma (hiihtoloma)", "Lukukausi päättyy"],
             "fnone": lambda full, F: (f"Kunnan lähteestä ei löytynyt erikseen ilmoitettuja päiviä ({full.lower()}). "
                                       + ("Esiopetus noudattaa usein peruskoulun lomia, mutta alku- ja loppupäivä voivat poiketa. Tarkista päiväkodista tai koululta."
                                          if F == "esi" else "Lukion lomat ovat usein samat kuin peruskoulussa, mutta lukukauden alku ja loppu voivat poiketa. Tarkista lukiolta.")),
-            "fsrc": "Luettu kunnan omasta asiakirjasta; ei vielä varmistettu toisesta lähteestä. Puuttuvat rivit eivät ole lähteessä erikseen.",
+            "fsrc": "Vain perusopetuksesta poikkeavat päivät.",
             "pv": "Esikatselu – tietoja tarkistetaan vielä. Sivu ei näy hakukoneissa.",
             "foot": 'Tiedot kunnan omasta lähteestä · Ei evästeitä, ei seurantaa · <a href="/tietoa/">Tietoa</a> · <a href="/tietosuoja/">Tietosuoja</a>',
             "home": "/"},
@@ -93,15 +95,50 @@ T = {"fi": {"wd": WD, "hol": {k: v["name"] for k, v in HOL.items()}, "week": "vi
             "adult": "Exakta datum för vuxna", "rows": ["Skolan börjar", "Höstlov", "Jullov", "Sportlov (vinterlov)", "Skolan slutar"],
             "perus": "Grundskola", "tabs": ["Grundskola", "Förskola", "Gymnasium"], "tabl": "Skolform", "full": ["Förskoleundervisning", "Gymnasium"],
             "note": "Lovdagarna är vardagar, veckosluten kommer till. Enskilda skolor kan ha avvikande dagar.",
-            "src": "Källor", "upd": "Uppdaterad", "calc": "skoldagar beräknade", "docd": "skoldagar enligt kommunen", "law": "lag",
+            "src": "Källor", "upd": "Kontrollerad", "calc": "skoldagar beräknade", "docd": "skoldagar enligt kommunen", "law": "lag",
             "noyear": "uppskattning – kommunens beslut har inte hittats ännu, kontrollera med skolan",
             "frows": ["Terminen börjar", "Höstlov", "Höstterminen slutar", "Jullov", "Vårterminen börjar", "Sportlov (vinterlov)", "Terminen slutar"],
             "fnone": lambda full, F: ("Kommunens källa anger inga separata datum för " + ("förskoleundervisningen. Förskolan följer ofta grundskolans lov, men start och slut kan avvika. Kontrollera med daghemmet eller skolan."
                                       if F == "esi" else "gymnasiet. Gymnasiets lov är ofta desamma som grundskolans, men terminens start och slut kan avvika. Kontrollera med gymnasiet.")),
-            "fsrc": "Läst ur kommunens eget dokument; ännu inte bekräftat av en annan källa. Rader som saknas anges inte separat i källan.",
+            "fsrc": "Endast datum som avviker från grundskolan.",
             "pv": "Förhandsvisning – uppgifterna kontrolleras ännu.",
             "foot": 'Uppgifter från kommunens egen källa · Inga kakor, ingen spårning · <a href="/tietoa/">Om tjänsten (på finska)</a> · <a href="/tietosuoja/">Dataskydd (på finska)</a>',
             "home": "/sv/"}}
+
+
+def lastmods(gate, today):
+    """path -> [datan sormenjälki, lastmod]. Edellinen tila haetaan julkaistulta sivustolta (/lastmod.json).
+    Sama sormenjälki -> sama päivä; muuttunut -> tänään. Ensimmäisellä kerralla lastmod jätetään pois (ei tiedetä)."""
+    import hashlib
+    import urllib.request
+    try:
+        with urllib.request.urlopen(BASE + "/lastmod.json", timeout=15) as r:
+            prev = json.loads(r.read().decode())
+    except Exception:  # noqa: BLE001 – ensimmäinen kerta tai verkkovirhe
+        prev = {}
+    out = {}
+    for p in gate.pages:
+        h = hashlib.sha1(json.dumps(gate.sig.get(p), ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()[:16]
+        old = prev.get(p)
+        if old and old[0] == h:
+            out[p] = old
+        else:
+            out[p] = [h, today.isoformat() if prev else None]
+    return out
+
+
+def fix_hreflang(out, gate):
+    """hreflang vain, jos molemmat kieliversiot ovat indeksissä (ohut käännös ei saa vastinetta)."""
+    for f in out.rglob("index.html"):
+        t = f.read_text(encoding="utf-8")
+        if 'rel="alternate" hreflang=' not in t:
+            continue
+        path = "/" + str(f.parent.relative_to(out)).replace(".", "").strip("/") + "/"
+        path = "/" if path == "//" else path
+        alts = re.findall(r'<link rel="alternate" hreflang="\w+" href="' + re.escape(BASE) + r'([^"]+)">', t)
+        if not gate.ok(path) or not all(gate.ok(a) for a in alts):
+            t = re.sub(r'<link rel="alternate" hreflang="[\w-]+" href="[^"]+">', "", t)
+            f.write_text(t, encoding="utf-8")
 
 
 def view(rec, lang):
@@ -205,6 +242,7 @@ a.card{text-decoration:none;color:#2A1B0F}a.card:hover{transform:translateY(-2px
 .wkb small{font-size:12px;font-weight:800}.wkb b{font-size:24px;font-weight:900}
 .az{scroll-margin-top:16px}
 .src,.src a,td a{overflow-wrap:anywhere}
+.facts ul{margin:0;padding-left:20px}.facts li{margin:6px 0;font-size:16px}
 .lnote{background:#FFF0C7;border-radius:14px;padding:10px 14px;font-size:15px;font-weight:700;margin:0 0 14px}
 .lng{margin:0 0 -6px;text-align:right;font-size:14px;font-weight:800}.lng a{color:#6B5847}
 .tabs{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap}.tabs button{font:inherit;font-weight:800;font-size:15px;padding:9px 16px;border-radius:999px;border:2px solid #E8D9C4;background:#fff;color:#2A1B0F;cursor:pointer}
@@ -288,18 +326,39 @@ def short_title(t, n=62):
 
 # fi <-> sv -vastinesivut (hreflang)
 ALT = {"/fi/syysloma/": "/sv/hostlov/", "/fi/joululoma/": "/sv/jullov/", "/fi/hiihtoloma-2027/": "/sv/sportlov-2027/",
-       "/fi/kesaloma/": "/sv/sommarlov/", "/artikkelit/hiihtoloma-2027/": "/sv/artiklar/sportlov-2027/",
-       "/artikkelit/joululoma-2026/": "/sv/artiklar/jullov-2026/", "/": "/sv/"}
+       "/fi/kesaloma/": "/sv/sommarlov/", "/": "/sv/"}
+# yhdistetyt sivut (sääntö 2: yksi sivu per kysymys) -> 301
+REDIRECTS = [("/artikkelit/hiihtoloma-2027/", "/fi/hiihtoloma-2027/"), ("/artikkelit/joululoma-2026/", "/fi/joululoma/"),
+             ("/fi/hiihtoloma-2027/:kunta/", "/fi/:kunta/"), ("/sv/artiklar/sportlov-2027/", "/sv/sportlov-2027/"),
+             ("/sv/artiklar/jullov-2026/", "/sv/jullov/")]
 ALT_REV = {v: k for k, v in ALT.items()}
 
 
-def page(title, desc, body, path, schema=None, theme="brand", top_search=True, lang="fi", alt=None):
+GATE = None  # build() asettaa
+
+
+def sig_rec(rec):
+    """Sivun datan sormenjälki lastmodia varten: vain päivät, tilat ja lähteet (ei tarkistuspäivää)."""
+    return {"y": {y: {"c": v["confidence"], "f": {k: [x["start"], x["end"]] for k, x in v["fields"].items()},
+                      "s": v.get("source"), "d": [v.get("days_calc"), v.get("days_doc")]} for y, v in rec["years"].items()},
+            "forms": rec.get("forms") or {}}
+
+
+def page(title, desc, body, path, schema=None, theme="brand", top_search=True, lang="fi", alt=None, g=None, sig=None):
+    """g = (sivutyyppi, indeksiin?, syy) indeksointiportilta. Sivu ilman tyyppiä on virhe."""
+    if g is None:
+        raise ValueError(f"sivulta {path} puuttuu indeksointiportin tyyppi")
+    GATE.rec(path, *g)
+    GATE.sig[path] = sig if sig is not None else body
     title = short_title(title)
     if not alt and (path in ALT or path in ALT_REV):
         alt = {"fi": ALT_REV.get(path, path), "sv": ALT.get(path, path)}
-    robots = '<meta name="robots" content="noindex,nofollow">' if PREVIEW else ""
+    robots = ('<meta name="robots" content="noindex,nofollow">' if PREVIEW else
+              "" if g[1] else '<meta name="robots" content="noindex,follow">')
     pv = f'<div class="pv">{T[lang]["pv"]}</div>' if PREVIEW else ""
     hl = "".join(f'<link rel="alternate" hreflang="{lg}" href="{BASE}{p}">' for lg, p in (alt or {}).items())
+    if alt and "fi" in alt:
+        hl += f'<link rel="alternate" hreflang="x-default" href="{BASE}{alt["fi"]}">'
     sd = f'<script type="application/ld+json">{json.dumps(schema, ensure_ascii=False)}</script>' if schema else ""
     return f"""<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(title)}</title><meta name="description" content="{html.escape(desc)}">{robots}
@@ -430,9 +489,139 @@ def cards(rec, today, year, lang="fi"):
     return f'<div class="grid">{"".join(items)}</div>'
 
 
+REG_GEN = {"Uusimaa": "Uudenmaan", "Varsinais-Suomi": "Varsinais-Suomen", "Satakunta": "Satakunnan", "Kanta-Häme": "Kanta-Hämeen",
+           "Pirkanmaa": "Pirkanmaan", "Päijät-Häme": "Päijät-Hämeen", "Kymenlaakso": "Kymenlaakson", "Etelä-Karjala": "Etelä-Karjalan",
+           "Etelä-Savo": "Etelä-Savon", "Pohjois-Savo": "Pohjois-Savon", "Pohjois-Karjala": "Pohjois-Karjalan", "Keski-Suomi": "Keski-Suomen",
+           "Etelä-Pohjanmaa": "Etelä-Pohjanmaan", "Pohjanmaa": "Pohjanmaan", "Keski-Pohjanmaa": "Keski-Pohjanmaan",
+           "Pohjois-Pohjanmaa": "Pohjois-Pohjanmaan", "Kainuu": "Kainuun", "Lappi": "Lapin", "Ahvenanmaa": "Ahvenanmaan"}
+REG_SV = {"Uusimaa": "Nyland", "Varsinais-Suomi": "Egentliga Finland", "Satakunta": "Satakunta", "Kanta-Häme": "Egentliga Tavastland",
+          "Pirkanmaa": "Birkaland", "Päijät-Häme": "Päijänne-Tavastland", "Kymenlaakso": "Kymmenedalen", "Etelä-Karjala": "Södra Karelen",
+          "Etelä-Savo": "Södra Savolax", "Pohjois-Savo": "Norra Savolax", "Pohjois-Karjala": "Norra Karelen", "Keski-Suomi": "Mellersta Finland",
+          "Etelä-Pohjanmaa": "Södra Österbotten", "Pohjanmaa": "Österbotten", "Keski-Pohjanmaa": "Mellersta Österbotten",
+          "Pohjois-Pohjanmaa": "Norra Österbotten", "Kainuu": "Kajanaland", "Lappi": "Lappland", "Ahvenanmaa": "Åland"}
+
+
+def _easter(y):
+    a, b, c = y % 19, y // 100, y % 100
+    dd, e = b // 4, b % 4
+    g = (8 * b + 13) // 25
+    h = (19 * a + b - dd - g + 15) % 30
+    i, k = c // 4, c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mo = (h + l - 7 * m + 114) // 31
+    return date(y, mo, (h + l - 7 * m + 114) % 31 + 1)
+
+
+PUBLIC_HOLIDAYS = {x for y in (2026, 2027, 2028) for x in (
+    date(y, 1, 1), date(y, 1, 6), date(y, 5, 1), date(y, 12, 6), date(y, 12, 24), date(y, 12, 25), date(y, 12, 26),
+    _easter(y) - timedelta(2), _easter(y) + timedelta(1), _easter(y) + timedelta(39))}
+
+
+def hol_key(k, v):
+    """Vertailuavain: syys/talvi = viikko, joulu = alkupäivä, kesä = luettu (ei laista johdettu) viimeinen koulupäivä."""
+    f = v["fields"]
+    if k == "kesa":
+        e = f.get("end")
+        return e["start"] if e and not str(e.get("quote", "")).startswith("laki") else None
+    x = f.get(k)
+    return None if not x else (week(x["start"]) if k in ("syys", "talvi") else x["start"])
+
+
+def region_stats(data, year):
+    st = defaultdict(lambda: defaultdict(dict))  # maakunta -> loma -> id -> avain
+    for r in data:
+        v = r["years"].get(year)
+        if G.own(v):
+            for k in ("syys", "joulu", "talvi", "kesa"):
+                key = hol_key(k, v)
+                if key:
+                    st[r["region"]][k][r["id"]] = key
+    return st
+
+
+def facts(rec, lang, stats, names, year="2026-2027", today=None):
+    """'Lyhyesti': jokainen lause syntyy kunnan omasta datasta (sääntö 3). Ei lauseita arvioista."""
+    v = rec["years"].get(year)
+    if not G.own(v):
+        return ""
+    f, sv = v["fields"], lang == "sv"
+    nm = (rec.get("name_sv") or rec["name"]) if sv else rec["name"].split(" - ")[0]
+    reg = rec["region"]
+    regn = REG_SV.get(reg, reg) if sv else REG_GEN.get(reg, reg)
+    out = []
+
+    def cmp(k, key, label):
+        others = {i: x for i, x in stats[reg][k].items() if i != rec["id"]}
+        if not others:
+            return ""
+        same = sum(1 for x in others.values() if x == key)
+        diff = sorted(((names[i][1 if sv else 0], x) for i, x in others.items() if x != key), key=lambda t: str(t[1]))
+        fmtk = (lambda x: f"{'v.' if sv else 'vk'} {x}") if k in ("syys", "talvi") else (lambda x: f"{d(x).day}.{d(x).month}.")
+        if sv:
+            t = f" Samma {label} som {same} av {len(others)} andra kommuner i {regn}" if same else f" Ingen annan kommun i {regn} har samma {label}"
+            if diff and len(diff) <= 6:
+                t += ": avvikande " + ", ".join(f"{n} ({fmtk(x)})" for n, x in diff)
+        else:
+            t = (f" Sama {label[0]} on {same}/{len(others)} muulla {regn} kunnalla" if same else f" Millään muulla {regn} kunnalla ei ole samaa {label[1]}")
+            if diff and len(diff) <= 6:
+                t += ", eri: " + ", ".join(f"{n} ({fmtk(x)})" for n, x in diff)
+        return t + "."
+
+    wd = T[lang]["wd"]
+    if "start" in f:
+        a = d(f["start"]["start"])
+        out.append((f"Skolan börjar {wd[a.weekday()]} {a.day}.{a.month}.{a.year}." if sv else
+                    f"Koulu alkaa {WD_LONG[a.weekday()]} {a.day}.{a.month}.{a.year}."))
+    for k in ("syys", "talvi"):
+        x = f[k]
+        w = week(x["start"])
+        lbl = ("höstlovet" if k == "syys" else "sportlovet") if sv else ("syysloma" if k == "syys" else "hiihtoloma")
+        out.append((f"{lbl.capitalize()} är vecka {w} ({fmt(x['start'], x['end'])})." if sv else f"{lbl.capitalize()} on viikolla {w} ({fmt(x['start'], x['end'])}).")
+                   + cmp(k, w, "vecka" if sv else ("viikko", "viikkoa")))
+    j = f["joulu"]
+    ja, jb = d(j["start"]), d(j["end"]) + timedelta(1)
+    while jb.weekday() >= 5:
+        jb += timedelta(1)
+    t1 = (v.get("extra") or {}).get("term1_end")
+    out.append((f"Jullovet börjar {wd[ja.weekday()]} {ja.day}.{ja.month}. och skolan fortsätter {wd[jb.weekday()]} {jb.day}.{jb.month}.{jb.year}." if sv else
+                f"Joululoma alkaa {WD_LONG[ja.weekday()]} {ja.day}.{ja.month}. ja koulu jatkuu {WD_LONG[jb.weekday()]} {jb.day}.{jb.month}.{jb.year}.")
+               + (((" Julfesten är på lördag " if sv else " Joulujuhla on lauantaina ") + f"{d(t1).day}.{d(t1).month}." + (" (skoldag)." if sv else " (koulupäivä)."))
+                  if t1 and d(t1).weekday() == 5 else "")
+               + cmp("joulu", j["start"], "startdag" if sv else ("alkupäivä", "alkupäivää")))
+    e = f.get("end")
+    if e:
+        ea = d(e["start"])
+        derived = str(e.get("quote", "")).startswith("laki")
+        out.append((f"Skolan slutar {wd[ea.weekday()]} {ea.day}.{ea.month}.{ea.year}" if sv else f"Koulu loppuu {WD_LONG[ea.weekday()]} {ea.day}.{ea.month}.{ea.year}")
+                   + ((" (enligt lagen, vecka 22)." if sv else " (lain mukaan viikon 22 lauantaina).") if derived else "."))
+    ex = v.get("extra") or {}
+    if ex.get("saturdays"):
+        out.append(("Lördagsskoldagar: " if sv else "Lauantaikoulupäivät: ") + ", ".join(f"{d(x).day}.{d(x).month}." for x in ex["saturdays"]))
+    free = [x for x in ex.get("free") or [] if d(x).weekday() < 5 and d(x) not in PUBLIC_HOLIDAYS]  # arkipyhät eivät ole kunnan vapaapäiviä
+    if free:
+        out.append(("Lediga dagar: " if sv else "Vapaapäivät: ") + ", ".join(f"{wd[d(x).weekday()]} {d(x).day}.{d(x).month}." for x in free))
+    n_days = v.get("days_doc") if v.get("days_doc") == v.get("days_expected") else (v.get("days_calc") if v.get("days_calc") == v.get("days_expected") else None)
+    if n_days:
+        out.append(f"Läsåret har {n_days} skoldagar." if sv else f"Lukuvuodessa on {n_days} koulupäivää.")
+    for F, (fi_n, sv_n) in (("esi", ("Esiopetuksen", "Förskolans")), ("lukio", ("Lukion", "Gymnasiets"))):
+        fy = ((rec.get("forms") or {}).get(F) or {}).get(year)
+        if fy and len(fy) >= 2 and not form_diff(rec, F).get(year):
+            out.append(f"{sv_n} datum är desamma som grundskolans." if sv else f"{fi_n} päivät ovat samat kuin perusopetuksessa.")
+    v2 = rec["years"].get("2027-2028")
+    if G.own(v2):
+        t2 = v2["fields"]["talvi"]
+        out.append((f"Läsåret 2027–2028 är redan beslutat: sportlov vecka {week(t2['start'])}." if sv else
+                    f"Lukuvuosi 2027–2028 on jo päätetty: hiihtoloma viikolla {week(t2['start'])}."))
+    head = "Kort om " + nm if sv else nm + " lyhyesti"
+    return f'<section class="box facts"><h2>{html.escape(head)}</h2><ul>' + "".join(f"<li>{html.escape(x)}</li>" for x in out) + "</ul></section>"
+
+
 def adult_table(rec, lang="fi"):
     L = T[lang]
     years = sorted(rec["years"].items())
+    if any(v["confidence"] != "arvio" for _, v in years):
+        years = [(y, v) for y, v in years if v["confidence"] != "arvio"]  # arvio ei ole kunnan omaa dataa: ei sarakkeeksi oman datan viereen
     if not years:
         return ""
     rows = list(zip(L["rows"], ("start", "syys", "joulu", "talvi", "end")))
@@ -463,11 +652,15 @@ def adult_table(rec, lang="fi"):
             srcs.append(f"{yy}: {L['noyear']}")
     upd = d(max(v["updated"] for _, v in years))
     perus = (f'<div style="overflow-x:auto"><table><thead><tr><th>{L["perus"]}</th>{head}</tr></thead>'
-             f'<tbody>{body}</tbody></table></div><p class="src">{L["note"]}<br>'
+             f'<tbody>{body}</tbody></table></div><p class="src">'
              f'{L["src"]} – {" · ".join(srcs)}. {L["upd"]} {upd.day}.{upd.month}.{upd.year}.</p>')
     tabs = [("perus", L["tabs"][0], perus)]
     for F, nm, full in (("esi", L["tabs"][1], L["full"][0]), ("lukio", L["tabs"][2], L["full"][1])):
-        tabs.append((F, nm, form_table(rec, F, full, upd, lang)))
+        ft = form_table(rec, F, full, upd, lang)
+        if ft:  # välilehti vain, jos koulumuodolla on perusopetuksesta poikkeavia päiviä (ei toistoa, ei yleistekstiä)
+            tabs.append((F, nm, ft))
+    if len(tabs) == 1:
+        return f'<section class="box"><h2>{L["adult"]}</h2>{perus}</section>'
     btns = "".join(f'<button type="button" role="tab" id="t-{F}" aria-controls="p-{F}" aria-selected="{"true" if i == 0 else "false"}"'
                    f'{"" if i == 0 else " tabindex=-1"}>{nm}</button>' for i, (F, nm, _) in enumerate(tabs))
     panels = "".join(f'<div role="tabpanel" id="p-{F}" aria-labelledby="t-{F}" class="tp">{c}</div>' for F, _, c in tabs)
@@ -478,12 +671,25 @@ def adult_table(rec, lang="fi"):
 FORM_KEYS = ("start", "syys", "term1_end", "joulu", "term2_start", "talvi", "end")
 
 
+def form_diff(rec, F):
+    """Koulumuodon kentät, jotka poikkeavat perusopetuksesta: {vuosi: {kenttä: {...}}}."""
+    out = {}
+    for y, r in ((rec.get("forms") or {}).get(F) or {}).items():
+        pf = (rec["years"].get(y) or {}).get("fields", {})
+        dif = {k: x for k, x in r.items() if k in FORM_KEYS and not (k in pf and (pf[k]["start"], pf[k]["end"]) == (x["start"], x["end"]))
+               and not (k in ("term1_end", "term2_start"))}
+        if dif:
+            out[y] = dif
+    return out
+
+
 def form_table(rec, F, full, upd, lang="fi"):
+    """Vain perusopetuksesta poikkeavat päivät. None, jos koulumuodolla ei ole omia (poikkeavia) päiviä."""
     L = T[lang]
-    fy = (rec.get("forms") or {}).get(F) or {}
+    fy = form_diff(rec, F)
     years = sorted(fy.items())
     if not years:
-        return f'<p class="src" style="font-size:15px">{L["fnone"](full, F)}</p>'
+        return None
     head = "".join(f"<th>{y.replace('-', '–')}<br>{badge('yksi_lähde', lang)}</th>" for y, _ in years)
     body = ""
     for label, k in zip(L["frows"], FORM_KEYS):
@@ -565,6 +771,11 @@ def build(data_path, out_dir):
         data.append(v)
         fi_note[r["id"]] = note
     raw_by_id = {r["id"]: r for r in raw}
+    global GATE
+    GATE = G.Gate()
+    stats = region_stats(data, "2026-2027")
+    names = {r["id"]: (r["name"].split(" - ")[0], r.get("name_sv") or r["name"]) for r in raw}
+    GATE.sig = {}
     out = Path(out_dir)
     if out.exists():
         shutil.rmtree(out)
@@ -602,7 +813,7 @@ def build(data_path, out_dir):
                 f'<button class="btn alt" id="kuva" type="button" hidden data-s="{s}" data-y="{y1}"><span>Tallenna kuvana</span></button>'
                 f'<button class="btn alt" id="tulosta" type="button" hidden><span>Tulosta</span></button></div>'
                 f'<script src="/kuva.js" defer></script>'
-                f'{adult_table(rec)}{REPORT_FORM.format(id=rec["id"], back=f"/fi/{s}/")}{live(rec, "fi", y1) if rec["years"] else ""}')
+                f'{facts(rec, "fi", stats, names, today=today)}{adult_table(rec)}{REPORT_FORM.format(id=rec["id"], back=f"/fi/{s}/")}{live(rec, "fi", y1) if rec["years"] else ""}')
         tal = (rec["years"].get(y1) or {}).get("fields", {}).get("talvi")
         desc = (f"{rec['name']}: syysloma, joululoma ja hiihtoloma" + (f" (vk {week(tal['start'])})" if tal else "")
                 + " sekä koulun alku ja loppu. Lähtölaskuri ja lähteet.")
@@ -613,26 +824,12 @@ def build(data_path, out_dir):
         ttl = fit(*([f"{nm0}: koulujen lomat 2026–27, hiihtoloma vk {week(tal['start'])} | Koululomat",
                      f"{nm0}: koululomat 2026–27, hiihtoloma vk {week(tal['start'])}"] if tal and rec["years"][y1]["confidence"] != "arvio" else []),
                   f"{nm0}: koulujen lomat 2026–2027 | Koululomat", f"{nm0}: koulujen lomat 2026–2027")
-        write(f"/fi/{s}/", page(ttl, desc, body, f"/fi/{s}/", schema, theme=th, alt=alt))
+        write(f"/fi/{s}/", page(ttl, desc, body, f"/fi/{s}/", schema, theme=th, alt=alt, g=("kunta", *G.kunta(rec)), sig=sig_rec(rec)))
         (out / "fi" / s / "lomat.ics").write_text(ics(rec), encoding="utf-8")
         urls.append(f"/fi/{s}/")
         ac.append({"n": rec["name"], "sv": rec.get("name_sv") or "", "s": s, "r": rec["region"],
                    "u": [[k, a.isoformat(), b.isoformat()] for k, a, b, _, _ in holidays_of(rec) if b >= today], "t": bool(tal),
                    **({"ss": sv_slug[rec["id"]]} if rec["id"] in sv_slug else {})})
-        if tal:
-            yv = rec["years"][y1]
-            n = nights(d(tal["start"]), today)
-            est = yv["confidence"] == "arvio"
-            hb = (f'<h1>Hiihtoloma 2027 – {rec["name"]}</h1><section class="hero{" est" if est else ""}">{icon("talvi", 64, "currentColor")}'
-                  f'<p class="lead">Hiihtolomaan on</p><div class="big" id="cd" data-d="{tal["start"]}" data-e="{tal["end"]}" data-k="talvi">{n}</div><p class="unit">{yo(n)}!</p>{share_btn(rec["name"], hol="hiihtoloma")}'
-                  f'<p class="when">{fmt(tal["start"], tal["end"])} · viikko {week(tal["start"])}{" (arvio)" if est else ""}</p>'
-                  f'<p style="margin:6px 0 0">{badge(yv["confidence"])}</p></section>'
-                  f'<div class="btns"><a class="btn" href="/fi/{s}/lomat.ics">Lisää kalenteriin</a><a class="btn alt" href="/fi/{s}/">Kaikki lomat: {rec["name"]}</a>'
-                  f'<a class="btn alt" href="/fi/hiihtoloma-2027/">Muut kunnat</a></div>{adult_table(rec)}<script src="/live.js"></script>')
-            write(f"/fi/hiihtoloma-2027/{s}/", page(f"Hiihtoloma 2027 {rec['name']} – viikko {week(tal['start'])} | Koululomat",
-                                                     f"{rec['name']}: hiihtoloma 2027 on {fmt(tal['start'], tal['end'])} (viikko {week(tal['start'])}). Lähtölaskuri ja lähde.",
-                                                     hb, f"/fi/hiihtoloma-2027/{s}/", theme="talvi"))
-            urls.append(f"/fi/hiihtoloma-2027/{s}/")
     lomat = {}
     for rec in data:
         yy = {}
@@ -651,7 +848,8 @@ def build(data_path, out_dir):
                            "Vertaa kahden kunnan syys-, joulu-, hiihto- ja kesälomia. Näet heti, onko lomaa yhtä aikaa.",
                            f'<h1>Vertaa kahta kuntaa</h1><p class="sub">Esimerkiksi oma kunta ja mummola tai serkkujen kunta: onko lomaa yhtä aikaa?</p>'
                            f'<div class="layout" style="gap:12px">{search_form("qa", "Ensimmäinen kunta", big=True, pick="a")}{search_form("qb", "Toinen kunta", big=True, pick="b")}</div>'
-                           f'<div id="cmp" data-year="2026-2027"></div><noscript><p class="box">Vertailu tarvitsee JavaScriptin. Voit katsoa kuntien lomat myös <a href="/haku/">kuntalistasta</a>.</p></noscript><script src="/vertaa.js" defer></script>', "/vertaa/", top_search=False))
+                           f'<div id="cmp" data-year="2026-2027"></div><noscript><p class="box">Vertailu tarvitsee JavaScriptin. Voit katsoa kuntien lomat myös <a href="/haku/">kuntalistasta</a>.</p></noscript><script src="/vertaa.js" defer></script>', "/vertaa/", top_search=False,
+                           g=("navi", False, "työkalu: sisältö syntyy vasta kuntien valinnasta")))
     urls.append("/vertaa/")
     (out / "kunnat.json").write_text(json.dumps(sorted(ac, key=lambda x: x["n"]), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
@@ -675,16 +873,17 @@ def build(data_path, out_dir):
                 f'<div class="btns"><a class="btn" href="/sv/{ss}/lov.ics">Lägg till i kalendern</a>'
                 f'<button class="btn alt" id="kuva" type="button" hidden data-s="{s}" data-y="{y1}" data-n="{html.escape(nm)}" data-l="sv"><span>Spara som bild</span></button>'
                 f'<button class="btn alt" id="tulosta" type="button" hidden><span>Skriv ut</span></button></div>'
-                f'<script src="/kuva.js" defer></script>{adult_table(rec, "sv")}{REPORT_FORM_SV.format(id=rec["id"], back=f"/sv/{ss}/")}{live(rec, "sv", y1) if rec["years"] else ""}')
+                f'<script src="/kuva.js" defer></script>{facts(rec, "sv", stats, names, today=today)}{adult_table(rec, "sv")}{REPORT_FORM_SV.format(id=rec["id"], back=f"/sv/{ss}/")}{live(rec, "sv", y1) if rec["years"] else ""}')
         tal = (rec["years"].get(y1) or {}).get("fields", {}).get("talvi")
         desc = (f"{nm}: höstlov, jullov och sportlov" + (f" (vecka {week(tal['start'])})" if tal else "") + " samt skolans start och slut. Nedräkning och källor.")
         th = "brand" if not nk or rec["years"].get(y1, {}).get("confidence") == "arvio" else nk
         write(f"/sv/{ss}/", page(fit(*([f"{nm}: skolornas lov 2026–27, sportlov v. {week(tal['start'])} | Koululomat"] if tal and rec["years"][y1]["confidence"] != "arvio" else []),
                                      f"{nm}: skolornas lov 2026–2027 | Koululomat", f"{nm}: skolornas lov 2026–2027"), desc, body, f"/sv/{ss}/",
                                  {"@context": "https://schema.org", "@type": "WebPage", "name": f"Skolornas lov {nm}", "inLanguage": "sv",
-                                  "about": {"@type": "City", "name": nm}}, theme=th, lang="sv", alt=alt))
+                                  "about": {"@type": "City", "name": nm}}, theme=th, lang="sv", alt=alt,
+                                 g=("kunta_sv", *G.kunta_sv(raw_by_id[rec["id"]], rec)), sig=sig_rec(rec)))
         urls.append(f"/sv/{ss}/")
-        sv_views.append((rec, ss, nm))
+        sv_views.append((rec, ss, nm, GATE.ok(f"/sv/{ss}/")))
         (out / "sv" / ss / "lov.ics").write_text(ics(rec, "sv", f"{BASE}/sv/{ss}/"), encoding="utf-8")
         sv_lomat[s] = {y: {"c": v["confidence"], **{k: [v["fields"][k]["start"], v["fields"][k]["end"]] for k in ("syys", "joulu", "talvi") if k in v["fields"]},
                            **({"kesa": v["fields"]["end"]["start"]} if "end" in v["fields"] else {})} for y, v in rec["years"].items()}
@@ -697,7 +896,7 @@ def build(data_path, out_dir):
         if s_ in lomat:
             lomat[s_]["sv"] = ys_
     (out / "lomat.json").write_text(json.dumps(lomat, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    sv_arts, sv_urls = sv_pages.build(sv_views, today, write, {"page": page, "search_form": search_form, "icon": icon, "HOL": HOL, "DARK": DARK,
+    sv_arts, sv_urls = sv_pages.build(sv_views, today, write, {"page": page, "search_form": search_form, "icon": icon, "HOL": HOL, "DARK": DARK, "G": G,
                                                                "HPAGE": HPAGE, "BASE": BASE, "schema": articles._schema, "faq": articles._faq})
     urls += sv_urls
     sv_tiles = "".join(f'<a class="tile" href="{sv_pages.HPAGE_SV[k][0]}" style="--bg:{HOL[k]["bg"]};--c:{HOL[k]["c"]};--ct:{DARK[k]}">'
@@ -714,7 +913,8 @@ def build(data_path, out_dir):
     write("/sv/", page("Skolornas lov per kommun 2026–2027 | Koululomat",
                        "Hur många nätter till lovet? Skolornas höst-, jul- och sportlov i tvåspråkiga kommuner och på Åland. Uppgifter från kommunernas egna källor.",
                        sv_body, "/sv/", {"@context": "https://schema.org", "@type": "WebSite", "name": "Koululomat", "url": BASE + "/sv/", "inLanguage": "sv"},
-                       top_search=False, lang="sv", alt={"fi": "/", "sv": "/sv/"}))
+                       top_search=False, lang="sv", alt={"fi": "/", "sv": "/sv/"},
+                       g=("etusivu_sv", *G.count_ok(sum(1 for *_, ok in sv_views if ok), G.MIN_KUNNAT_LOMA_SV, "indeksoitavaa ruotsinkielistä kuntasivua"))))
     urls.append("/sv/")
 
     # lomasivut (väriprofiili loman mukaan)
@@ -732,13 +932,7 @@ def build(data_path, out_dir):
             return None
         return d(f[k]["start"]), d(f[k]["end"]), v["confidence"]
 
-    arts = articles.build_articles(data, today, write, {"page": page, "search_form": search_form, "icon": icon, "share_btn": share_btn, "HOL": HOL, "BASE": BASE})
-    urls += [a["path"] for a in arts]
-    acards = "".join(f'<a class="acard" href="{a["path"]}" style="--c:{HOL[a["k"]]["c"]}"><div class="ic" style="background:{HOL[a["k"]]["bg"]};flex:none">{icon(a["k"], 26)}</div>'
-                     f'<div><b>{a["title"]}</b><span>{a["sub"]}</span></div></a>' for a in arts)
-    ART_LINK = {a["k"]: f'<h2 style="margin-top:30px">Lue myös</h2><div class="acards">{acards.split("</a>")[i]}</a></div>' for i, a in enumerate(arts)}
-
-    summary = {}
+    summary, lists, n_own = {}, {}, {}
     for k in ("syys", "joulu", "talvi", "kesa"):
         groups = defaultdict(list)
         for rec in data:
@@ -747,6 +941,8 @@ def build(data_path, out_dir):
                 key = week(x[0].isoformat()) if k in ("syys", "talvi") else x[0]
                 groups[key].append((rec, x))
         ok = [x for rs in groups.values() for _, x in rs if x[2] != "arvio"]
+        # portti: kesäloman loppu ei saa olla pelkästään laista johdettu
+        n_own[k] = sum(1 for r in data if G.own(r["years"].get(y1)) and (k != "kesa" or not str(r["years"][y1]["fields"].get("end", {}).get("quote", "laki")).startswith("laki")))
         past = bool(ok) and all(x[1] < today for x in ok)
         if k in ("syys", "talvi"):
             ws = sorted({week(x[0].isoformat()) for x in ok})
@@ -772,25 +968,37 @@ def build(data_path, out_dir):
                 badge_html = f'<div class="wkb" style="--bg:{h["bg"]};--c:{DARK[k]}"><small>{WD[key.weekday()]}</small><b>{key.day}.{key.month}.</b></div>'
                 title = (f"Koulu loppuu {WD[key.weekday()]} {key.day}.{key.month}.{key.year}" if k == "kesa"
                          else f"Alkaa {WD[key.weekday()]} {key.day}.{key.month}.{key.year}")
-            link = (lambda r: f"/fi/hiihtoloma-2027/{slug(r['name'])}/") if k == "talvi" else (lambda r: f"/fi/{slug(r['name'])}/")
+            link = lambda r: f"/fi/{slug(r['name'])}/"
             li = "".join(f'<li><a href="{link(r)}">{r["name"]}</a>' + (' <span class="b est">arvio</span>' if x[2] == "arvio" else "") + "</li>"
                          for r, x in sorted(rs, key=lambda t: t[0]["name"]))
-            cols += (f'<div class="card"><div class="gh">{badge_html}<div><b>{title}</b><div class="dt">{len(rs)} kuntaa'
+            anchor = f"vk-{key}" if k in ("syys", "talvi") else f"d-{key.month}-{key.day}"
+            cols += (f'<div class="card" id="{anchor}"><div class="gh">{badge_html}<div><b>{title}</b><div class="dt">{len(rs)} kuntaa'
                      + (f" ({len(rs) - n_ok} arviota)" if n_ok < len(rs) else "") + f'</div></div></div>'
                      f'<ul class="list" style="columns:2 140px;margin-top:12px">{li}</ul></div>')
-        intro = {"syys": "Syysloma oli viikolla 41, 42 tai 43 kunnasta riippuen.",
-                 "joulu": "Joululoma alkaa kunnasta riippuen 21.–23.12. Mikä on sinun kuntasi?",
-                 "talvi": "Hiihtoloman viikko riippuu kunnasta. Mikä on sinun?",
-                 "kesa": "Koulu loppuu useimmissa kunnissa lauantaina 5.6.2027. Mikä on sinun kuntasi?"}[k]
+        if k in ("talvi", "joulu"):
+            lists[k] = cols  # hiihto- ja joululoma: yksi sivu per kysymys -> artikkeli ja kuntalista samalla sivulla (articles.py)
+            continue
+        # johdanto datasta (sääntö 3: ei kiinteää tekstiä)
+        if k == "syys":
+            intro = f"Syysloma {'oli' if past else 'on'} kunnasta riippuen viikolla {line.replace('vk ', '').replace(' · ohi jo', '')}."
+        else:
+            ends = Counter(x[0] for x in ok)
+            top, cnt = ends.most_common(1)[0]
+            intro = f"Koulu loppuu {cnt} kunnassa {len(ok)}:stä {WD_LONG[top.weekday()]} {top.day}.{top.month}.{top.year}."
         hb = (f'<section class="hero" style="height:auto;text-align:left;align-items:stretch">'
               f'<div style="display:flex;align-items:center;gap:12px">{icon(k, 44, "currentColor")}<h1 style="margin:0;color:inherit">{label} kunnittain</h1></div>'
-              f'<p class="lead" style="margin:10px 0 16px">{intro}</p>{search_form("q2", "Kirjoita kuntasi", big=True, prefix="/fi/hiihtoloma-2027/" if k == "talvi" else None)}</section>'
-              f'<div class="wk" style="margin-top:22px">{cols}</div>')
-        if k in ART_LINK:
-            hb += ART_LINK[k]
+              f'<p class="lead" style="margin:10px 0 16px">{intro}</p>{search_form("q2", "Kirjoita kuntasi", big=True)}</section>'
+              f'<div class="wk" style="margin-top:22px">{cols}</div>'
+              f'<p class="src">Luvuissa {len(ok)} kunnan omat päätökset; arviot on merkitty. <a href="/tietoa/">Miten tiedot kerätään?</a></p>')
         write(path, page(f"{label} kunnittain – kaikki kunnat | Koululomat",
-                         f"{label}: koulujen loma-ajat kaikissa Suomen kunnissa. Tiedot kuntien omista lähteistä.", hb, path, theme=k, top_search=False))
-        urls.append(path)
+                         f"{label}: koulujen loma-ajat kaikissa Suomen kunnissa. Tiedot kuntien omista lähteistä.", hb, path, theme=k, top_search=False,
+                         g=("loma", *G.count_ok(n_own[k], G.MIN_KUNNAT_LOMA, "kunnan omat päivät")),
+                         sig=sorted((r["name"], str(x)) for rs in groups.values() for r, x in rs)))
+
+    arts = articles.build_articles(data, today, write, {"page": page, "search_form": search_form, "icon": icon, "share_btn": share_btn, "HOL": HOL,
+                                                        "BASE": BASE, "lists": lists, "G": G, "HPAGE": HPAGE})
+    acards = "".join(f'<a class="acard" href="{a["path"]}" style="--c:{HOL[a["k"]]["c"]}"><div class="ic" style="background:{HOL[a["k"]]["bg"]};flex:none">{icon(a["k"], 26)}</div>'
+                     f'<div><b>{a["title"]}</b><span>{a["sub"]}</span></div></a>' for a in arts)
 
     # etusivu (E1: haku ensin + lomat värillisinä valintoina)
     n_ok = sum(1 for r in data if (r["years"].get(y1) or {}).get("confidence") in ("varmistettu", "yksi_lähde"))
@@ -811,7 +1019,8 @@ def build(data_path, out_dir):
                     "Montako yötä lomaan? Koulujen syys-, joulu- ja hiihtolomat jokaisessa Suomen kunnassa. Tiedot kuntien omista lähteistä.",
                     body, "/", {"@context": "https://schema.org", "@type": "WebSite", "name": "Koululomat", "url": BASE + "/",
                                 "publisher": {"@type": "Organization", "name": "BR Entertainment", "logo": BASE + "/icon-512.png"}},
-                    top_search=False, alt={"fi": "/", "sv": "/sv/"}))
+                    top_search=False, alt={"fi": "/", "sv": "/sv/"},
+                    g=("etusivu", *G.count_ok(sum(1 for r in data if G.own(r["years"].get(y1))), G.MIN_KUNNAT_ETUSIVU, "kunnan omat lomat"))))
     # kaikki kunnat A–Ö (+ haku ilman JavaScriptiä)
     by_letter = defaultdict(list)
     for r in data:
@@ -821,7 +1030,7 @@ def build(data_path, out_dir):
         for c in letters_set)
     write("/haku/", page("Kaikki kunnat A–Ö | Koululomat", "Koulujen lomat kaikissa Suomen kunnissa aakkosjärjestyksessä.",
                          f'<h1>Kaikki kunnat</h1>{search_form("q2", big=True, main=True)}<div class="letters" style="margin:20px 0">{letters}</div>{az}',
-                         "/haku/", top_search=False))
+                         "/haku/", top_search=False, g=("navi", False, "kuntalista ilman omaa dataa (navigointi)")))
     urls.append("/haku/")
 
     write("/tietoa/", page("Tietoa palvelusta | Koululomat", "Miten koulujen lomatiedot kerätään ja tarkistetaan.",
@@ -832,12 +1041,12 @@ lautakunnan päätöksestä, kunnan verkkosivulta tai sen liitteestä. Muiden ko
 <li>Tilat: {badge("varmistettu")} {badge("yksi_lähde")} {badge("ehdotus")} {badge("arvio")}. Arviota ei koskaan esitetä varmana.</li>
 <li>Lähteet haetaan uudelleen säännöllisesti, ja muuttunut sisältö luetaan uudelleen.</li></ul>
 <h2>Oikeudet</h2><p>Viranomaisen päätöksiin ei ole tekijänoikeutta (tekijänoikeuslaki 9 §). Päivämäärät ovat faktoja.</p>
-<h2>Ylläpitäjä</h2><p>{OWNER}</p></section>""", "/tietoa/"))
+<h2>Ylläpitäjä</h2><p>{OWNER}</p></section>""", "/tietoa/", g=("menetelma", True, "menetelmä ja lähteet")))
     write("/tietosuoja/", page("Tietosuoja | Koululomat", "Koululomat ei käytä evästeitä eikä seurantaa.",
                                f"""<h1>Tietosuoja</h1><section class="box"><p>Palvelu ei käytä evästeitä, analytiikkaa, seurantaa eikä kohdennettua mainontaa.
 Sivuilla ei ladata ulkopuolisia skriptejä tai fontteja. Kävijöinä on myös lapsia.</p>
 <p><b>Virheilmoitukset:</b> tallennamme vain viestin, kunnan ja mahdollisen lähdelinkin. Emme tallenna nimeä, sähköpostia emmekä IP-osoitetta. Ilmoitukset poistetaan 24 kuukauden kuluttua.</p>
-<p><b>Kalenteritilaus (.ics)</b> on tavallinen tiedosto, joka ei sisällä seurantaa.</p><p>Palvelua ylläpitää {OWNER}. Sivusto toimii Cloudflaren palvelimilla.</p></section>""", "/tietosuoja/"))
+<p><b>Kalenteritilaus (.ics)</b> on tavallinen tiedosto, joka ei sisällä seurantaa.</p><p>Palvelua ylläpitää {OWNER}. Sivusto toimii Cloudflaren palvelimilla.</p></section>""", "/tietosuoja/", g=("navi", False, "juridinen sivu")))
 
     for f in STATIC.iterdir():
         if f.suffix in (".svg", ".png", ".ico", ".js"):
@@ -847,16 +1056,25 @@ Sivuilla ei ladata ulkopuolisia skriptejä tai fontteja. Kävijöinä on myös l
         "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"}, {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"}],
         "theme_color": "#E8741E", "background_color": "#FFF6E5", "display": "browser", "start_url": "/"}, ensure_ascii=False))
     (out / "robots.txt").write_text("User-agent: *\nDisallow: /\n" if PREVIEW else f"User-agent: *\nAllow: /\nSitemap: {BASE}/sitemap.xml\n")
+    # sivukartta = vain portin läpäisseet sivut; lastmod vain, kun sivun data oikeasti muuttui (sääntö 5)
+    lm = lastmods(GATE, today)
+    (out / "lastmod.json").write_text(json.dumps(lm, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     (out / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-                                     + "".join(f"<url><loc>{BASE}{u}</loc><lastmod>{today.isoformat()}</lastmod></url>" for u in urls) + "</urlset>\n")
+                                     + "".join(f"<url><loc>{BASE}{u}</loc>" + (f"<lastmod>{lm[u][1]}</lastmod>" if lm[u][1] else "") + "</url>"
+                                               for u in sorted(GATE.indexable(), key=lambda u: (u != "/", u))) + "</urlset>\n")
+    fix_hreflang(out, GATE)
+    (out / "_redirects").write_text("".join(f"{a} {b} 301\n" for a, b in REDIRECTS))
     hdr = "/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  Permissions-Policy: interest-cohort=()\n"
     if PREVIEW:
         hdr += "  X-Robots-Tag: noindex, nofollow\n"
     hdr += "/fi/*/lomat.ics\n  Content-Type: text/calendar; charset=utf-8\n/sv/*/lov.ics\n  Content-Type: text/calendar; charset=utf-8\n/fonts/*\n  Cache-Control: public, max-age=31536000, immutable\n"
     (out / "_headers").write_text(hdr)
     (out / "404.html").write_text(page("Sivua ei löytynyt | Koululomat", "Sivua ei löytynyt.",
-                                       f"<h1>Hups, tätä sivua ei löytynyt</h1>{datalist}<section class=\"box\"><p>Kirjoita kuntasi nimi ylähakuun tai palaa <a href=\"/\">etusivulle</a>.</p></section>", "/404"))
-    print(f"{len(urls)} sivua, {len(data)} kuntaa -> {out}")
+                                       f"<h1>Hups, tätä sivua ei löytynyt</h1>{datalist}<section class=\"box\"><p>Kirjoita kuntasi nimi ylähakuun tai palaa <a href=\"/\">etusivulle</a>.</p></section>", "/404",
+                                       g=("navi", False, "404")))
+    GATE.print_report()
+    G.dump(GATE, os.environ.get("GATE_REPORT") or str(out.parent / "gate_report.json"))
+    print(f"{len(GATE.pages)} sivua, joista {len(GATE.indexable())} indeksiin, {len(data)} kuntaa -> {out}")
 
 
 if __name__ == "__main__":

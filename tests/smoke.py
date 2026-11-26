@@ -25,6 +25,7 @@ BASE = (sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") el
 AXE = sys.argv[sys.argv.index("--axe") + 1] if "--axe" in sys.argv else None
 QUICK = "--quick" in sys.argv  # vain otos sivuista (paikallinen kokeilu)
 FAIL, WARN, OK = [], [], []
+sm_text = ""
 
 
 def fail(area, msg):
@@ -44,6 +45,8 @@ async def crawl():
     async with httpx.AsyncClient(timeout=30, follow_redirects=False, headers={"user-agent": "koululomat-smoke"}) as c:
         sm = (await c.get(BASE + "/sitemap.xml")).text
         urls = [u.replace("https://koululomat.fi", "") for u in re.findall(r"<loc>([^<]+)", sm)]
+        global sm_text
+        sm_text = sm
         sem = asyncio.Semaphore(12)
 
         async def get(u):
@@ -101,6 +104,26 @@ def check_pages(urls, pages, links, extra):
                 issues["hreflang-kohde puuttuu"].append(f"{u}→{p}")
             elif u not in alts.get(p, {}).values():
                 issues["hreflang ei ole molempiin suuntiin"].append(f"{u}→{p}")
+    # spämmisuoja: noindex-sivu ei saa olla sivukartassa (yllä), eikä arviokunta saa olla indeksissä
+    try:
+        L = httpx.get(BASE + "/lomat.json", timeout=30).json()
+        est = [f"/fi/{s}/" for s, r in L.items() if (r["y"].get("2026-2027") or {}).get("c") == "arvio"]
+        leak = [u for u in est if u in pages]
+        if leak:
+            issues["arviokunta sivukartassa (indeksointiportti)"] += leak
+        for u in est[:3]:
+            t = httpx.get(BASE + u, timeout=30).text
+            if 'name="robots" content="noindex' not in t:
+                issues["arviokunnalta puuttuu noindex"].append(u)
+        for old in ("/artikkelit/hiihtoloma-2027/", "/fi/hiihtoloma-2027/ylojarvi/"):
+            r = httpx.get(BASE + old, timeout=30, follow_redirects=False)
+            if r.status_code not in (301, 308):
+                issues["yhdistetty sivu ei ohjaa (301)"].append(f"{old} -> {r.status_code}")
+        lm = re.findall(r"<lastmod>([^<]+)", sm_text)
+        if lm and len(lm) > 50 and len(set(lm)) == 1 and lm[0] == dt.date.today().isoformat():
+            issues["lastmod sama tänään kaikilla sivuilla (ei rehellinen)"].append(f"{len(lm)} sivua")
+    except httpx.HTTPError as e:
+        warn("SEO", f"porttitarkistus ei onnistunut: {e}")
     dup = {k: v for k, v in titles.items() if len(v) > 1}
     if dup:
         issues["sama otsikko usealla sivulla"] += [f"{k[:40]}: {v[:2]}" for k, v in list(dup.items())[:3]]
@@ -139,6 +162,11 @@ def check_data():
     fail(area, f"{len(probs)} epäjärkevää lomaa: {probs[:6]}") if probs else ok(area, f"{len(L)} kunnan lomat järkeviä (fi + sv)")
     c = sum(1 for r in L.values() if (r["y"].get("2026-2027") or {}).get("c") not in (None, "arvio"))
     (ok if c >= 260 else fail)(area, f"kunnan oma lähde 2026–27: {c}/{len(L)} kuntaa")
+    try:  # sääntö 12: sivukartan koko ei saa kasvaa yli 20 % ilman uutta datalähdettä (verrataan kuntamäärään)
+        n_sm = len(re.findall(r"<loc>", sm_text))
+        (ok if n_sm <= 2 * len(L) else fail)("SEO", f"sivukartassa {n_sm} sivua ({len(L)} kuntaa)")
+    except NameError:
+        pass
 
 
 # ---------------------------------------------------------------- 3. selain
@@ -181,9 +209,14 @@ def browser_checks(urls):
             cd = pg.locator(".hero").inner_text()
             if not re.search(r"\d+\s*\n?\s*yö|nyt!", cd):
                 fail(who, f"kuntasivun laskuri outo: {cd[:60]!r}")
-            pg.click("#t-lukio")
-            if not (pg.locator("#p-lukio").is_visible() and not pg.locator("#p-perus").is_visible()):
-                fail(who, "välilehdet eivät vaihdu")
+            for kunta in ("tampere", "helsinki", "espoo", "oulu", "turku"):  # välilehdet vain kunnissa, joilla poikkeavia päiviä
+                pg.goto(f"{BASE}/fi/{kunta}/")
+                tab = pg.locator(".tabs [role=tab]")
+                if tab.count() > 1:
+                    t2 = tab.nth(1); pid = t2.get_attribute("aria-controls"); t2.click()
+                    if not (pg.locator(f"#{pid}").is_visible() and not pg.locator("#p-perus").is_visible()):
+                        fail(who, f"välilehdet eivät vaihdu ({kunta})")
+                    break
             pg.goto(BASE + "/vertaa/"); pg.fill("#qa", "ylöjär"); pg.wait_for_timeout(400); pg.press("#qa", "Enter")
             pg.fill("#qb", "oulu"); pg.wait_for_timeout(400); pg.press("#qb", "Enter"); pg.wait_for_timeout(800)
             if "Syysloma" not in pg.locator("#cmp").inner_text():
@@ -233,9 +266,9 @@ def browser_checks(urls):
             br = p.chromium.launch()
             pg = br.new_page(viewport={"width": 390, "height": 844})
             agg = defaultdict(list)
-            for u in ["/", "/fi/ylojarvi/", "/fi/hiihtoloma-2027/", "/fi/joululoma/", "/artikkelit/hiihtoloma-2027/",
+            for u in ["/", "/fi/ylojarvi/", "/fi/tampere/", "/fi/hiihtoloma-2027/", "/fi/joululoma/", "/fi/syysloma/",
                       "/artikkelit/koulu-loppuu-ennen-joulua-2026/", "/vertaa/?a=ylojarvi&b=oulu", "/haku/", "/sv/", "/sv/vanda/",
-                      "/sv/sportlov-2027/", "/sv/artiklar/jullov-2026/"]:
+                      "/sv/sportlov-2027/", "/sv/jullov/"]:
                 pg.goto(BASE + u); pg.wait_for_timeout(300); pg.add_script_tag(content=axe)
                 for v in pg.evaluate("axe.run(document,{runOnly:['wcag2a','wcag2aa','best-practice']}).then(r=>r.violations.map(v=>[v.id,v.impact,v.nodes[0].target.join(' ')]))"):
                     agg[(v[0], v[1])].append(f"{u} {v[2]}")

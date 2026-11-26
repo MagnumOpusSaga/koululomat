@@ -243,6 +243,8 @@ a.card{text-decoration:none;color:#2A1B0F}a.card:hover{transform:translateY(-2px
 .az{scroll-margin-top:16px}
 .src,.src a,td a{overflow-wrap:anywhere}
 .facts ul{margin:0;padding-left:20px}.facts li{margin:6px 0;font-size:16px}
+.topline{display:inline-block;margin:0 0 10px;padding:8px 16px;border-radius:99px;background:var(--hero,#E8741E);color:var(--ht,#fff);font-weight:900;font-size:17px}
+.topline.est{background:#6B5847;color:#fff}.topline .b{margin-left:6px}
 .lnote{background:#FFF0C7;border-radius:14px;padding:10px 14px;font-size:15px;font-weight:700;margin:0 0 14px}
 .lng{margin:0 0 -6px;text-align:right;font-size:14px;font-weight:800}.lng a{color:#6B5847}
 .tabs{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap}.tabs button{font:inherit;font-weight:800;font-size:15px;padding:9px 16px;border-radius:999px;border:2px solid #E8D9C4;background:#fff;color:#2A1B0F;cursor:pointer}
@@ -617,6 +619,30 @@ def facts(rec, lang, stats, names, year="2026-2027", today=None):
     return f'<section class="box facts"><h2>{html.escape(head)}</h2><ul>' + "".join(f"<li>{html.escape(x)}</li>" for x in out) + "</ul></section>"
 
 
+def topline(rec, today, lang="fi"):
+    """Sivun ylin rivi (K4-B): 'Joululoma alkaa ma 21.12. – 25 yötä'. live.js pitää sen ajan tasalla."""
+    L = T[lang]
+    for k, a, b, y, c in holidays_of(rec):
+        if b < today:
+            continue
+        est = c == "arvio"
+        nm = L["hol"][k]
+        if a <= today:
+            back = b + timedelta(1)
+            while back.weekday() >= 5:
+                back += timedelta(1)
+            t = (f"{nm} nu – skolan fortsätter {L['wd'][back.weekday()]} {back.day}.{back.month}." if lang == "sv" else
+                 f"{nm} on nyt – koulu jatkuu {L['wd'][back.weekday()]} {back.day}.{back.month}.")
+        else:
+            n = nights(a, today)
+            t = (f"{nm} börjar {L['wd'][a.weekday()]} {a.day}.{a.month}. – {n} {L['night'](n)}" if lang == "sv" and k != "kesa" else
+                 f"Skolan slutar {L['wd'][(a - timedelta(1)).weekday()]} {(a - timedelta(1)).day}.{(a - timedelta(1)).month}. – {n} {L['night'](n)} till sommarlovet" if lang == "sv" else
+                 f"{nm} alkaa {L['wd'][a.weekday()]} {a.day}.{a.month}. – {n} {L['night'](n)}")
+        return (f'<p class="topline{" est" if est else ""}" id="tl" data-k="{k}">{html.escape(t)}'
+                + (f' <span class="b est">{L["conf"]["arvio"]}</span>' if est else "") + "</p>")
+    return ""
+
+
 def adult_table(rec, lang="fi"):
     L = T[lang]
     years = sorted(rec["years"].items())
@@ -807,7 +833,7 @@ def build(data_path, out_dir):
             top = '<section class="box"><p>Tämän kunnan lomia ei vielä löytynyt. Jos tiedät lähteen, ilmoita se alla – luemme sen.</p></section>'
         cmp_url = HPAGE[nk][0] if nk else "/fi/hiihtoloma-2027/"
         body = ((f'<p class="lng"><a href="{alt["sv"]}" hreflang="sv" lang="sv">På svenska</a></p>' if alt else "")
-                + f'<h1>{rec["name"]}{sv}: koulujen lomat</h1>{lang_note(fi_note[rec["id"]], "fi")}{top}'
+                + topline(rec, today) + f'<h1>{rec["name"]}{sv}: koulujen lomat</h1>{lang_note(fi_note[rec["id"]], "fi")}{top}'
                 f'<div class="btns"><a class="btn" href="/fi/{s}/lomat.ics">Lisää lomat kalenteriin</a>'
                 f'<a class="btn alt" href="/vertaa/?a={s}">Vertaa toiseen kuntaan</a>'
                 f'<button class="btn alt" id="kuva" type="button" hidden data-s="{s}" data-y="{y1}"><span>Tallenna kuvana</span></button>'
@@ -815,8 +841,12 @@ def build(data_path, out_dir):
                 f'<script src="/kuva.js" defer></script>'
                 f'{facts(rec, "fi", stats, names, today=today)}{adult_table(rec)}{REPORT_FORM.format(id=rec["id"], back=f"/fi/{s}/")}{live(rec, "fi", y1) if rec["years"] else ""}')
         tal = (rec["years"].get(y1) or {}).get("fields", {}).get("talvi")
-        desc = (f"{rec['name']}: syysloma, joululoma ja hiihtoloma" + (f" (vk {week(tal['start'])})" if tal else "")
-                + " sekä koulun alku ja loppu. Lähtölaskuri ja lähteet.")
+        jl = (rec["years"].get(y1) or {}).get("fields", {}).get("joulu")
+        own_y = G.own(rec["years"].get(y1))
+        desc = ((f"{rec['name'].split(' - ')[0]}: joululoma alkaa {WD_LONG[d(jl['start']).weekday()]} {d(jl['start']).day}.{d(jl['start']).month}.{d(jl['start']).year}"
+                 + (f", hiihtoloma viikolla {week(tal['start'])}" if tal else "") + ". Kaikki koulujen lomat ja lähde kunnan päätöksestä.")
+                if own_y and jl else
+                f"{rec['name']}: syysloma, joululoma ja hiihtoloma (arvio) sekä koulun alku ja loppu. Lähtölaskuri ja lähteet.")
         schema = {"@context": "https://schema.org", "@type": "WebPage", "name": f"Koulujen lomat {rec['name']}",
                   "about": {"@type": "City", "name": rec["name"]}}
         th = "brand" if not nk or rec["years"].get(y1, {}).get("confidence") == "arvio" else nk
@@ -869,7 +899,7 @@ def build(data_path, out_dir):
         else:
             top = '<section class="box"><p>Kommunens lov har inte hittats ännu. Om du känner till källan, meddela den nedan – vi läser den.</p></section>'
         body = (f'<p class="lng"><a href="/fi/{s}/" hreflang="fi" lang="fi">Suomeksi</a></p>'
-                f'<h1>{nm}{f" ({fi_nm})" if fi_nm != nm else ""}: skolornas lov</h1>{lang_note(note, "sv")}{top}'
+                + topline(rec, today, "sv") + f'<h1>{nm}{f" ({fi_nm})" if fi_nm != nm else ""}: skolornas lov</h1>{lang_note(note, "sv")}{top}'
                 f'<div class="btns"><a class="btn" href="/sv/{ss}/lov.ics">Lägg till i kalendern</a>'
                 f'<button class="btn alt" id="kuva" type="button" hidden data-s="{s}" data-y="{y1}" data-n="{html.escape(nm)}" data-l="sv"><span>Spara som bild</span></button>'
                 f'<button class="btn alt" id="tulosta" type="button" hidden><span>Skriv ut</span></button></div>'

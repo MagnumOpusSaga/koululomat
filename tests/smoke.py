@@ -28,6 +28,13 @@ FAIL, WARN, OK = [], [], []
 sm_text = ""
 
 
+def nobeacon(pg):
+    """N36 / K4-C: testiajot eivät saa näkyä Cloudflare Web Analyticsissa oikeina käynteinä."""
+    pg.route("**/cloudflareinsights.com/**", lambda r: r.abort())
+    pg.route("**/cdn-cgi/rum**", lambda r: r.abort())
+    return pg
+
+
 def fail(area, msg):
     FAIL.append((area, msg)); print("  ✗", area, msg, flush=True)
 
@@ -174,7 +181,7 @@ def browser_checks(urls):
     with sync_playwright() as p:
         # 3a. vaakavieritys + JS-virheet kaikilla sivuilla (pienin yleinen puhelin 360 px)
         br = p.chromium.launch()
-        pg = br.new_page(viewport={"width": 360, "height": 800})
+        pg = nobeacon(br.new_page(viewport={"width": 360, "height": 800}))
         errs = defaultdict(list)
         cur = {"u": ""}
         pg.on("pageerror", lambda e: errs[cur["u"]].append(str(e)[:120]))
@@ -198,7 +205,7 @@ def browser_checks(urls):
         for engine, dev in ((p.webkit, p.devices["iPhone 13"]), (p.chromium, p.devices["Pixel 7"])):
             who = "iPhone" if engine.name == "webkit" else "Android"
             br = engine.launch()
-            pg = br.new_context(**dev, locale="fi-FI").new_page()
+            pg = nobeacon(br.new_context(**dev, locale="fi-FI").new_page())
             for q, want in [("ylojarvi", "/fi/ylojarvi/"), ("Helsnki", "/fi/helsinki/"), ("jyvaskyla", "/fi/jyvaskyla/"), ("ii", "/fi/ii/"),
                             ("mariehamn", "/fi/maarianhamina-mariehamn/"), ("tavastkyro", "/fi/hameenkyro/")]:
                 pg.goto(BASE + "/"); pg.fill("#q2", q); pg.wait_for_timeout(400); pg.press("#q2", "Enter"); pg.wait_for_timeout(800)
@@ -248,7 +255,7 @@ def browser_checks(urls):
             a, b = dt.date.fromisoformat(y["joulu"][0]), dt.date.fromisoformat(y["joulu"][1])
             for day, expect in ((a - dt.timedelta(1), "1 yö"), (a, "nyt"), (a + dt.timedelta(3), "nyt"), (b + dt.timedelta(1), "lomaan")):
                 ctx = br.new_context(viewport={"width": 390, "height": 844})
-                pg = ctx.new_page()
+                pg = nobeacon(ctx.new_page())
                 pg.clock.set_fixed_time(dt.datetime.combine(day, dt.time(9)))
                 pg.goto(f"{BASE}/fi/{slug}/"); pg.wait_for_timeout(300)
                 hero = " ".join(pg.locator(".hero").inner_text().split())
@@ -264,7 +271,7 @@ def browser_checks(urls):
         if AXE:
             axe = open(AXE).read()
             br = p.chromium.launch()
-            pg = br.new_page(viewport={"width": 390, "height": 844})
+            pg = nobeacon(br.new_page(viewport={"width": 390, "height": 844}))
             agg = defaultdict(list)
             for u in ["/", "/fi/ylojarvi/", "/fi/tampere/", "/fi/hiihtoloma-2027/", "/fi/joululoma/", "/fi/syysloma/",
                       "/artikkelit/koulu-loppuu-ennen-joulua-2026/", "/vertaa/?a=ylojarvi&b=oulu", "/haku/", "/sv/", "/sv/vanda/",

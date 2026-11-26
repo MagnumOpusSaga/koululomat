@@ -48,6 +48,28 @@
     else { var x = days(T, a); n.textContent = x + " " + nn(x); }
   });
 
+  // ylin rivi (K4-B): "Joululoma alkaa ma 21.12. – 25 yötä" / "Joululoma on nyt – koulu jatkuu to 7.1."
+  var tl = document.getElementById("tl");
+  if (tl) {
+    if (!nxt) { tl.hidden = true; }
+    else {
+      var ka = nxt.a, txt;
+      if (ka <= T) {
+        var bk = new Date(nxt.b); bk.setDate(bk.getDate() + 1);
+        while (bk.getDay() === 0 || bk.getDay() === 6) bk.setDate(bk.getDate() + 1);
+        txt = SV ? S.hol[nxt.k] + " nu – skolan fortsätter " + S.wd[bk.getDay()] + " " + f1(bk)
+                 : S.hol[nxt.k] + " on nyt – koulu jatkuu " + S.wd[bk.getDay()] + " " + f1(bk);
+      } else {
+        var nd = days(T, ka);
+        if (SV && nxt.k === "kesa") { var le = new Date(ka); le.setDate(le.getDate() - 1);
+          txt = "Skolan slutar " + S.wd[le.getDay()] + " " + f1(le) + " – " + nd + " " + nn(nd) + " till sommarlovet"; }
+        else txt = S.hol[nxt.k] + (SV ? " börjar " : " alkaa ") + S.wd[ka.getDay()] + " " + f1(ka) + " – " + nd + " " + nn(nd);
+      }
+      tl.className = "topline" + (nxt.c === "arvio" ? " est" : "");
+      tl.innerHTML = esc(txt) + (nxt.c === "arvio" ? " " + H.bd.arvio : "");
+    }
+  }
+
   // laskuri
   var hero = document.querySelector(".hero[data-live]");
   if (!hero) return;

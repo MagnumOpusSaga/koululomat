@@ -28,10 +28,20 @@ FAIL, WARN, OK = [], [], []
 sm_text = ""
 
 
+BEACON_RX = re.compile(r"^https?://([^/]+\.)?cloudflareinsights\.com/|/cdn-cgi/rum")
+
+
 def nobeacon(pg):
-    """N36 / K4-C: testiajot eivät saa näkyä Cloudflare Web Analyticsissa oikeina käynteinä."""
-    pg.route("**/cloudflareinsights.com/**", lambda r: r.abort())
-    pg.route("**/cdn-cgi/rum**", lambda r: r.abort())
+    """N36 / K4-C: testiajot eivät saa näkyä Cloudflare Web Analyticsissa oikeina käynteinä.
+
+    Estää koko kontekstissa (myös avautuvat välilehdet) sekä beacon-skriptin (static.cloudflareinsights.com)
+    että datan lähetyksen (/cdn-cgi/rum). Jos jokin beacon-pyyntö silti menee läpi, testi epäonnistuu."""
+    ctx = pg.context
+    if not getattr(ctx, "_nobeacon", False):
+        ctx.route(BEACON_RX, lambda r: r.abort())
+        ctx.on("requestfinished", lambda req: BEACON_RX.search(req.url)
+               and fail("beacon", f"Web Analytics -pyyntö meni läpi testissä: {req.url[:80]}"))
+        ctx._nobeacon = True
     return pg
 
 

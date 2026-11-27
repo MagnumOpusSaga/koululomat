@@ -28,7 +28,7 @@ FAIL, WARN, OK = [], [], []
 sm_text = ""
 
 
-BEACON_RX = re.compile(r"^https?://([^/]+\.)?cloudflareinsights\.com/|/cdn-cgi/rum")
+BEACON_RX = re.compile(r"^https?://([^/]+\.)?cloudflareinsights\.com/|/cdn-cgi/rum|/api/e$")  # myös oma laskuri (K4-D)
 
 
 def nobeacon(pg):

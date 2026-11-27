@@ -103,3 +103,13 @@ CREATE TABLE IF NOT EXISTS report (
 
 CREATE INDEX IF NOT EXISTS idx_obs_mun_year ON observation(municipality, year);
 CREATE INDEX IF NOT EXISTS idx_holiday_year ON holiday(school_year);
+
+-- Nimetön laskuri (K4-D, Branun lupa 27.11.2026): vain päiväkohtaiset summat. Ei IP-osoitteita, ei evästeitä,
+-- ei käyttäjätunnisteita. kind = view | click | quick_exit, key = sivutyyppi tai sivutyyppi>kohde.
+CREATE TABLE IF NOT EXISTS counters (
+  day TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  key TEXT NOT NULL,
+  n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, kind, key)
+);

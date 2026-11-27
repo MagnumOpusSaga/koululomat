@@ -367,7 +367,7 @@ def page(title, desc, body, path, schema=None, theme="brand", top_search=True, l
 <link rel="canonical" href="{BASE}{path}">{hl}<link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-180.png"><link rel="manifest" href="/site.webmanifest"><meta name="theme-color" content="{THEME[theme][0]}">
 <link rel="preload" href="/fonts/nunito-latin-900-normal.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/fonts/nunito-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
-<style>{CSS}</style>{sd}<script src="/ac.js" defer></script></head><body style="{theme_style(theme)}">{pv}
+<style>{CSS}</style>{sd}<script src="/ac.js" defer></script><script src="/e.js" defer></script></head><body style="{theme_style(theme)}" data-pt="{g[0]}" data-own="{1 if g[1] else 0}">{pv}
 <div class="wrap"><header class="top"><a class="brand" href="{T[lang]["home"]}">{LOGO.format(s=40)}<b>Koulu<span>lomat</span></b></a>
 {search_form("q", lang=lang) if top_search else ""}</header>
 <main>{body}</main>
@@ -1072,9 +1072,10 @@ lautakunnan päätöksestä, kunnan verkkosivulta tai sen liitteestä. Muiden ko
 <li>Lähteet haetaan uudelleen säännöllisesti, ja muuttunut sisältö luetaan uudelleen.</li></ul>
 <h2>Oikeudet</h2><p>Viranomaisen päätöksiin ei ole tekijänoikeutta (tekijänoikeuslaki 9 §). Päivämäärät ovat faktoja.</p>
 <h2>Ylläpitäjä</h2><p>{OWNER}</p></section>""", "/tietoa/", g=("menetelma", True, "menetelmä ja lähteet")))
-    write("/tietosuoja/", page("Tietosuoja | Koululomat", "Koululomat ei käytä evästeitä eikä seurantaa.",
-                               f"""<h1>Tietosuoja</h1><section class="box"><p>Palvelu ei käytä evästeitä, analytiikkaa, seurantaa eikä kohdennettua mainontaa.
-Sivuilla ei ladata ulkopuolisia skriptejä tai fontteja. Kävijöinä on myös lapsia.</p>
+    write("/tietosuoja/", page("Tietosuoja | Koululomat", "Koululomat ei käytä evästeitä eikä seurantaa. Nimetön laskuri ilman tunnisteita.",
+                               f"""<h1>Tietosuoja</h1><section class="box"><p>Palvelu ei käytä evästeitä, seurantaa eikä kohdennettua mainontaa. Emme tunnista emmekä profiloi kävijöitä. Kävijöinä on myös lapsia.</p>
+<p><b>Nimetön laskuri:</b> laskemme päiväkohtaisina summina, montako kertaa sivutyyppejä avattiin, mitä nappeja painettiin (esim. "kalenteri", "jaa") ja montako kävijää poistui alle 15 sekunnissa. Emme tallenna IP-osoitetta, selainta, evästeitä emmekä mitään tunnistetta. Laskuri ei toimi, jos selaimessa on Do Not Track- tai Global Privacy Control -asetus.</p>
+<p><b>Cloudflare Web Analytics:</b> Cloudflare laskee sivulataukset evästeettömästi ja ilman sormenjälkeä; emme saa siitä tietoa yksittäisistä kävijöistä.</p>
 <p><b>Virheilmoitukset:</b> tallennamme vain viestin, kunnan ja mahdollisen lähdelinkin. Emme tallenna nimeä, sähköpostia emmekä IP-osoitetta. Ilmoitukset poistetaan 24 kuukauden kuluttua.</p>
 <p><b>Kalenteritilaus (.ics)</b> on tavallinen tiedosto, joka ei sisällä seurantaa.</p><p>Palvelua ylläpitää {OWNER}. Sivusto toimii Cloudflaren palvelimilla.</p></section>""", "/tietosuoja/", g=("navi", False, "juridinen sivu")))
 
